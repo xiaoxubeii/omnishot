@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 幻影影棚 DEMO</title>
+  <style>
+    :root {
+      --bg: #efe7db;
+      --card: rgba(255, 252, 247, 0.88);
+      --text: #21170d;
+      --muted: #6b5743;
+      --line: rgba(48, 31, 14, 0.12);
+      --accent: #9f5e25;
+      --accent-2: #dcc7a8;
+      --ok: #2a6b46;
+      --warn: #8c4e1d;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      color: var(--text);
+      font-family: "Noto Serif SC", "Source Han Serif SC", serif;
+      background:
+        radial-gradient(circle at top left, rgba(255,255,255,0.88), transparent 34%),
+        radial-gradient(circle at bottom right, rgba(220,199,168,0.9), transparent 28%),
+        linear-gradient(135deg, #e9e0d3, #f8f4ee 48%, #e7ddcf);
+      min-height: 100vh;
+    }
+    .wrap {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 42px 20px 60px;
+    }
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: clamp(34px, 6vw, 58px);
+      line-height: 0.98;
+      letter-spacing: -0.04em;
+    }
+    .hero p {
+      margin: 0;
+      max-width: 880px;
+      color: var(--muted);
+      font-size: 16px;
+    }
+    .grid {
+      margin-top: 26px;
+      display: grid;
+      grid-template-columns: 460px minmax(0, 1fr);
+      gap: 20px;
+    }
+    .panel {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 26px;
+      background: var(--card);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 22px 56px rgba(40, 24, 10, 0.08);
+    }
+    .row { margin-bottom: 14px; }
+    .inline {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+    }
+    input, textarea, select, button {
+      width: 100%;
+      font: inherit;
+      border-radius: 16px;
+    }
+    input, textarea, select {
+      padding: 14px 16px;
+      border: 1px solid rgba(48, 31, 14, 0.14);
+      background: rgba(255, 255, 255, 0.76);
+      color: var(--text);
+    }
+    textarea {
+      min-height: 124px;
+      resize: vertical;
+    }
+    button {
+      padding: 14px 18px;
+      border: none;
+      background: linear-gradient(135deg, var(--accent), #bb7638);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+    }
+    button:disabled {
+      opacity: 0.64;
+      cursor: wait;
+    }
+    .status, .meta {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.74);
+      white-space: pre-wrap;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .status strong {
+      color: var(--text);
+    }
+    .preview {
+      min-height: 720px;
+      display: grid;
+      place-items: center;
+      border-radius: 22px;
+      overflow: hidden;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35)),
+        repeating-linear-gradient(
+          45deg,
+          rgba(159,94,37,0.04),
+          rgba(159,94,37,0.04) 18px,
+          transparent 18px,
+          transparent 36px
+        );
+    }
+    .preview img {
+      display: block;
+      max-width: 100%;
+      max-height: 840px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(48, 31, 14, 0.1);
+      background: rgba(255,255,255,0.72);
+      color: var(--muted);
+      font-size: 12px;
+      margin: 10px 10px 0 0;
+    }
+    .hidden { display: none; }
+    @media (max-width: 980px) {
+      .grid { grid-template-columns: 1fr; }
+      .preview { min-height: 420px; }
+      .inline { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <section class="hero">
+      <h1>AI 幻影影棚</h1>
+      <p>同一个商品，拆成两条生成引擎处理。`Scene` 用于静物换场景和光影，`Try-On` 用于模特上身。这样才能同时保住商品主体一致性和商业展示质量。</p>
+      <div id="healthBadges"></div>
+    </section>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="row">
+          <label for="mode">生成模式</label>
+          <select id="mode">
+            <option value="scene">Scene 场景图</option>
+            <option value="tryon">Try-On 模特上身</option>
+          </select>
+        </div>
+
+        <div class="row">
+          <label for="image">商品图</label>
+          <input id="image" name="image" type="file" accept="image/*" required>
+        </div>
+
+        <div id="sceneFields">
+          <div class="row">
+            <label for="productBrief">产品描述</label>
+            <input id="productBrief" value="premium silk nightdress product photo" placeholder="例如：premium silk slip dress product photo">
+          </div>
+          <div class="row">
+            <label for="scenePreset">场景预设</label>
+            <select id="scenePreset"></select>
+          </div>
+          <div class="row">
+            <label for="prompt">正向提示词</label>
+            <textarea id="prompt" placeholder="根据预设自动填充，也可手改。"></textarea>
+          </div>
+          <div class="row">
+            <label for="negativePrompt">反向提示词</label>
+            <textarea id="negativePrompt"></textarea>
+          </div>
+        </div>
+
+        <div id="tryonFields" class="hidden">
+          <div class="row">
+            <label for="personTemplate">模特模板</label>
+            <select id="personTemplate"></select>
+          </div>
+          <div class="row">
+            <label for="personImage">自定义模特图（可选，优先级高于模板）</label>
+            <input id="personImage" name="personImage" type="file" accept="image/*">
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="clothType">服装类型</label>
+              <select id="clothType">
+                <option value="overall">连衣裙 / 整体服饰</option>
+                <option value="upper">上装</option>
+                <option value="lower">下装</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="steps">步数</label>
+              <input id="steps" type="number" value="30">
+            </div>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="guidance">Guidance</label>
+              <input id="guidance" type="number" step="0.1" value="2.5">
+            </div>
+            <div class="row">
+              <label for="seed">Seed</label>
+              <input id="seed" type="number" value="123">
+            </div>
+          </div>
+        </div>
+
+        <button id="submit">生成</button>
+        <div id="status" class="status">等待请求。</div>
+      </section>
+
+      <section class="panel">
+        <div class="preview">
+          <img id="result" alt="生成结果将显示在这里">
+        </div>
+        <div id="meta" class="meta">尚未生成。</div>
+      </section>
+    </div>
+  </div>
+
+  <script>
+    const state = {
+      scenePresets: [],
+      tryonTemplates: [],
+    };
+
+    const els = {
+      mode: document.getElementById("mode"),
+      image: document.getElementById("image"),
+      personImage: document.getElementById("personImage"),
+      productBrief: document.getElementById("productBrief"),
+      scenePreset: document.getElementById("scenePreset"),
+      prompt: document.getElementById("prompt"),
+      negativePrompt: document.getElementById("negativePrompt"),
+      personTemplate: document.getElementById("personTemplate"),
+      clothType: document.getElementById("clothType"),
+      steps: document.getElementById("steps"),
+      guidance: document.getElementById("guidance"),
+      seed: document.getElementById("seed"),
+      submit: document.getElementById("submit"),
+      status: document.getElementById("status"),
+      result: document.getElementById("result"),
+      meta: document.getElementById("meta"),
+      sceneFields: document.getElementById("sceneFields"),
+      tryonFields: document.getElementById("tryonFields"),
+      healthBadges: document.getElementById("healthBadges"),
+    };
+
+    function setStatus(text) {
+      els.status.textContent = text;
+    }
+
+    function renderBadges(health) {
+      const badges = [
+        `ComfyUI: ${health.comfyui_reachable ? "在线" : "离线"}`,
+        `Try-On: ${health.tryon_script_exists && health.tryon_root_exists ? "已接入" : "未就绪"}`,
+        `模板数: ${health.tryon_template_count ?? 0}`,
+        `Workflow 节点: ${health.workflow_nodes ?? 0}`,
+      ];
+      els.healthBadges.innerHTML = badges.map((item) => `<span class="badge">${item}</span>`).join("");
+    }
+
+    function updateModeUI() {
+      const isScene = els.mode.value === "scene";
+      els.sceneFields.classList.toggle("hidden", !isScene);
+      els.tryonFields.classList.toggle("hidden", isScene);
+      els.submit.textContent = isScene ? "生成场景图" : "生成模特上身图";
+    }
+
+    function applyScenePreset() {
+      const preset = state.scenePresets.find((item) => item.name === els.scenePreset.value);
+      if (!preset) return;
+      const productBrief = els.productBrief.value.trim() || "premium ecommerce product";
+      els.prompt.value = preset.prompt_template.replace("{product_brief}", productBrief);
+      els.negativePrompt.value = preset.negative_prompt || "";
+    }
+
+    async function fetchHealth() {
+      const response = await fetch("/api/health");
+      const data = await response.json();
+      renderBadges(data);
+      const comfy = data.comfyui_reachable ? "ComfyUI 在线" : "ComfyUI 未连通";
+      const tryon = data.tryon_script_exists && data.tryon_root_exists ? "Try-On 已接入" : "Try-On 未就绪";
+      setStatus(`${comfy}，${tryon}`);
+    }
+
+    async function fetchPresets() {
+      const [sceneResp, tryonResp] = await Promise.all([
+        fetch("/api/presets/scenes"),
+        fetch("/api/presets/tryon-templates"),
+      ]);
+      state.scenePresets = await sceneResp.json();
+      state.tryonTemplates = await tryonResp.json();
+
+      els.scenePreset.innerHTML = state.scenePresets
+        .map((item) => `<option value="${item.name}">${item.title}</option>`)
+        .join("");
+      els.personTemplate.innerHTML = state.tryonTemplates
+        .map((item) => `<option value="${item.name}">${item.name}</option>`)
+        .join("");
+      applyScenePreset();
+    }
+
+    function formatMeta(data) {
+      const lines = [
+        `pipeline: ${data.pipeline}`,
+        `generator_mode: ${data.generator_mode}`,
+        `filename: ${data.filename}`,
+        `output_url: ${data.output_url}`,
+      ];
+      if (data.local_input_path) {
+        lines.push(`local_input_path: ${data.local_input_path}`);
+      }
+      if (data.metadata && Object.keys(data.metadata).length) {
+        lines.push(`metadata: ${JSON.stringify(data.metadata, null, 2)}`);
+      }
+      return lines.join("\n");
+    }
+
+    async function readApiPayload(response) {
+      const text = await response.text();
+      try {
+        const data = JSON.parse(text);
+        if (!response.ok) {
+          throw new Error(data.detail || text || "请求失败");
+        }
+        return data;
+      } catch (error) {
+        if (!response.ok) {
+          throw new Error(text || `HTTP ${response.status}`);
+        }
+        throw error;
+      }
+    }
+
+    async function submitScene() {
+      const image = els.image.files[0];
+      const prompt = els.prompt.value.trim();
+      const negativePrompt = els.negativePrompt.value.trim();
+      const seed = els.seed.value.trim();
+
+      if (!image) throw new Error("请选择商品图。");
+      if (!prompt) throw new Error("请填写提示词。");
+
+      const formData = new FormData();
+      formData.append("image", image);
+      formData.append("prompt", prompt);
+      formData.append("negative_prompt", negativePrompt);
+      if (seed) formData.append("seed", seed);
+
+      const response = await fetch("/generate/scene", {
+        method: "POST",
+        body: formData,
+      });
+      return await readApiPayload(response);
+    }
+
+    async function submitTryon() {
+      const image = els.image.files[0];
+      if (!image) throw new Error("请选择商品图。");
+
+      const formData = new FormData();
+      formData.append("image", image);
+      formData.append("person_template", els.personTemplate.value);
+      formData.append("cloth_type", els.clothType.value);
+      formData.append("steps", els.steps.value.trim() || "30");
+      formData.append("guidance", els.guidance.value.trim() || "2.5");
+      formData.append("seed", els.seed.value.trim() || "123");
+
+      const personImage = els.personImage.files[0];
+      if (personImage) {
+        formData.append("person_image", personImage);
+      }
+
+      const response = await fetch("/generate/tryon", {
+        method: "POST",
+        body: formData,
+      });
+      return await readApiPayload(response);
+    }
+
+    els.mode.addEventListener("change", updateModeUI);
+    els.scenePreset.addEventListener("change", applyScenePreset);
+    els.productBrief.addEventListener("change", applyScenePreset);
+
+    els.submit.addEventListener("click", async () => {
+      els.submit.disabled = true;
+      setStatus("请求已发出，等待 GPU 返回结果...");
+      els.meta.textContent = "生成中。";
+
+      try {
+        const data = els.mode.value === "scene" ? await submitScene() : await submitTryon();
+        els.result.src = `data:${data.mime_type};base64,${data.image_base64}`;
+        setStatus(`完成。pipeline=${data.pipeline}，mode=${data.generator_mode}`);
+        els.meta.textContent = formatMeta(data);
+      } catch (error) {
+        setStatus(`失败: ${error.message}`);
+        els.meta.textContent = "请检查 API、ComfyUI、CatVTON 依赖和模型下载状态。";
+      } finally {
+        els.submit.disabled = false;
+      }
+    });
+
+    updateModeUI();
+    fetchHealth().catch((error) => setStatus(`健康检查失败: ${error.message}`));
+    fetchPresets().catch((error) => setStatus(`预设加载失败: ${error.message}`));
+  </script>
+</body>
+</html>

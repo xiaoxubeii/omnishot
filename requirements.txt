@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-multipart
+httpx
+websockets
+jinja2
+pydantic-settings
+pillow
+

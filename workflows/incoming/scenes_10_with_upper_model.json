@@ -1,0 +1,52 @@
+[
+  {
+    "name": "sunset_bedroom_window",
+    "prompt": "luxury silk nightdress product photo on a bed edge near a window, golden sunset rim light, warm cinematic shadows, premium commercial style",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "morning_terrace_fresh",
+    "prompt": "luxury silk nightdress product photo on a terrace table, soft morning sunlight, airy mood, natural high-end ecommerce lighting",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "neon_storefront_night",
+    "prompt": "luxury silk nightdress product photo in fashion storefront scene, subtle neon reflections, cool-warm contrast lighting, cinematic night ambience",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "studio_softbox_clean",
+    "prompt": "luxury silk nightdress product photo in minimalist studio, three-point softbox lighting, clean gradient background, luxury catalogue look",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "hotel_suite_lamp_glow",
+    "prompt": "luxury silk nightdress product photo in a high-end hotel suite, bedside tungsten lamp glow, rich texture contrast, elegant lifestyle mood",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "upper_body_model_backlit",
+    "prompt": "luxury silk nightdress product photo with an upper-body female model softly visible in background, backlight from window, editorial fashion atmosphere, realistic skin tone and lighting",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, extra limbs, distorted face, watermark, text"
+  },
+  {
+    "name": "upper_body_model_neutral_daylight",
+    "prompt": "luxury silk nightdress product photo, upper-body model beside a clothing rack in background, neutral daylight, premium boutique mood, shallow depth of field",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, extra limbs, distorted face, watermark, text"
+  },
+  {
+    "name": "upper_body_model_city_night",
+    "prompt": "luxury silk nightdress product photo, upper-body model in soft focus by window in background, city night bokeh outside, mixed cool and warm key lights, high-end campaign look",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, extra limbs, distorted face, watermark, text"
+  },
+  {
+    "name": "vanity_table_mirror_light",
+    "prompt": "luxury silk nightdress product photo near vanity table and mirror, practical bulbs around mirror, glamorous beauty editorial lighting",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  },
+  {
+    "name": "rainy_window_moody",
+    "prompt": "luxury silk nightdress product photo near rainy window, moody overcast blue light mixed with warm indoor fill, dramatic premium storytelling",
+    "negative_prompt": "blurry, low quality, deformed product, duplicate product, watermark, text"
+  }
+]

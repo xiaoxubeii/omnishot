@@ -1,0 +1,37 @@
+{
+  "image": [
+    {
+      "node_id": "1",
+      "input_name": "image"
+    }
+  ],
+  "positive_prompt": [
+    {
+      "node_id": "8",
+      "input_name": "clip_l"
+    },
+    {
+      "node_id": "8",
+      "input_name": "t5xxl"
+    }
+  ],
+  "negative_prompt": [
+    {
+      "node_id": "9",
+      "input_name": "clip_l"
+    },
+    {
+      "node_id": "9",
+      "input_name": "t5xxl"
+    }
+  ],
+  "seed": [
+    {
+      "node_id": "13",
+      "input_name": "noise_seed"
+    }
+  ],
+  "preferred_output_nodes": [
+    "26"
+  ]
+}
