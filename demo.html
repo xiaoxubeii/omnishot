@@ -112,12 +112,45 @@
     .status strong {
       color: var(--text);
     }
+    .note,
+    .guide {
+      margin-top: 10px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,0.6);
+      border: 1px solid rgba(48, 31, 14, 0.08);
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .ghost {
+      width: auto;
+      padding: 10px 14px;
+      border: 1px solid rgba(48, 31, 14, 0.14);
+      background: rgba(255,255,255,0.72);
+      color: var(--text);
+      font-size: 13px;
+      letter-spacing: 0.03em;
+    }
     .preview {
-      min-height: 720px;
       display: grid;
-      place-items: center;
+      gap: 14px;
+    }
+    .previewGrid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    .previewStage {
+      min-height: 560px;
       border-radius: 22px;
       overflow: hidden;
+      border: 1px solid var(--line);
       background:
         linear-gradient(180deg, rgba(255,255,255,0.7), rgba(255,255,255,0.35)),
         repeating-linear-gradient(
@@ -127,6 +160,26 @@
           transparent 18px,
           transparent 36px
         );
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+    .stageHead {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid rgba(48, 31, 14, 0.08);
+      background: rgba(255,255,255,0.45);
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .stageCanvas {
+      display: grid;
+      place-items: center;
+      padding: 20px;
     }
     .preview img {
       display: block;
@@ -147,7 +200,8 @@
     .hidden { display: none; }
     @media (max-width: 980px) {
       .grid { grid-template-columns: 1fr; }
-      .preview { min-height: 420px; }
+      .previewGrid { grid-template-columns: 1fr; }
+      .previewStage { min-height: 320px; }
       .inline { grid-template-columns: 1fr; }
     }
   </style>
@@ -172,9 +226,19 @@
         </div>
 
         <div class="row">
+          <label for="catalogProfile">电商模板</label>
+          <select id="catalogProfile">
+            <option value="">手动配置</option>
+          </select>
+          <div id="profileNote" class="note">可选：一键套用睡裙/服饰的推荐场景、模特和编辑策略。</div>
+        </div>
+
+        <div class="row">
           <label for="image">商品图</label>
           <input id="image" name="image" type="file" accept="image/*" required>
         </div>
+
+        <div id="modeGuide" class="guide">上传商品图后按当前模式生成。</div>
 
         <div id="sceneFields">
           <div class="row">
@@ -234,6 +298,7 @@
           <div class="row">
             <label for="editPreset">编辑预设</label>
             <select id="editPreset"></select>
+            <div id="editPresetGuide" class="note">选择一个多角度或光线编辑方向。</div>
           </div>
           <div class="row">
             <label for="editPrompt">补充提示词</label>
@@ -283,6 +348,14 @@
             <label for="editHeight">输出尺寸（高，可选）</label>
             <input id="editHeight" type="number" placeholder="默认按原图比例自动计算">
           </div>
+          <div class="row">
+            <label>连续编辑</label>
+            <div class="actions">
+              <button id="reuseResult" class="ghost" type="button">把当前结果设为下一轮输入</button>
+              <button id="clearReuse" class="ghost" type="button">恢复上传商品图</button>
+            </div>
+            <div id="editInputState" class="note">当前输入：上传商品图</div>
+          </div>
         </div>
 
         <button id="submit">生成</button>
@@ -291,7 +364,26 @@
 
       <section class="panel">
         <div class="preview">
-          <img id="result" alt="生成结果将显示在这里">
+          <div class="previewGrid">
+            <div class="previewStage">
+              <div class="stageHead">
+                <span>输入图</span>
+                <span id="inputBadge">等待选择</span>
+              </div>
+              <div class="stageCanvas">
+                <img id="sourcePreview" alt="输入图预览">
+              </div>
+            </div>
+            <div class="previewStage">
+              <div class="stageHead">
+                <span>生成结果</span>
+                <span id="resultBadge">等待生成</span>
+              </div>
+              <div class="stageCanvas">
+                <img id="result" alt="生成结果将显示在这里">
+              </div>
+            </div>
+          </div>
         </div>
         <div id="meta" class="meta">尚未生成。</div>
       </section>
@@ -300,13 +392,19 @@
 
   <script>
     const state = {
+      catalogProfiles: [],
       scenePresets: [],
       tryonTemplates: [],
       editPresets: [],
+      lastResult: null,
+      editInputOverride: null,
+      uploadPreviewUrl: "",
     };
 
     const els = {
       mode: document.getElementById("mode"),
+      catalogProfile: document.getElementById("catalogProfile"),
+      profileNote: document.getElementById("profileNote"),
       image: document.getElementById("image"),
       personImage: document.getElementById("personImage"),
       productBrief: document.getElementById("productBrief"),
@@ -328,9 +426,17 @@
       editUseLightning: document.getElementById("editUseLightning"),
       editWidth: document.getElementById("editWidth"),
       editHeight: document.getElementById("editHeight"),
+      editPresetGuide: document.getElementById("editPresetGuide"),
+      reuseResult: document.getElementById("reuseResult"),
+      clearReuse: document.getElementById("clearReuse"),
+      editInputState: document.getElementById("editInputState"),
       submit: document.getElementById("submit"),
+      modeGuide: document.getElementById("modeGuide"),
+      sourcePreview: document.getElementById("sourcePreview"),
+      inputBadge: document.getElementById("inputBadge"),
       status: document.getElementById("status"),
       result: document.getElementById("result"),
+      resultBadge: document.getElementById("resultBadge"),
       meta: document.getElementById("meta"),
       sceneFields: document.getElementById("sceneFields"),
       tryonFields: document.getElementById("tryonFields"),
@@ -340,6 +446,10 @@
 
     function setStatus(text) {
       els.status.textContent = text;
+    }
+
+    function getSelectedProfile() {
+      return state.catalogProfiles.find((item) => item.name === els.catalogProfile.value) || null;
     }
 
     function renderBadges(health) {
@@ -353,6 +463,19 @@
       els.healthBadges.innerHTML = badges.map((item) => `<span class="badge">${item}</span>`).join("");
     }
 
+    function updateModeGuide() {
+      const mode = els.mode.value;
+      const profile = getSelectedProfile();
+      const prefix = profile ? `当前模板：${profile.title}。` : "";
+      if (mode === "scene") {
+        els.modeGuide.textContent = `${prefix}上传商品图，选择场景预设，生成静物场景和光线变化图。`;
+      } else if (mode === "tryon") {
+        els.modeGuide.textContent = `${prefix}上传商品图，选择模特模板或自定义模特，生成真实上身展示图。`;
+      } else {
+        els.modeGuide.textContent = `${prefix}上传商品图或复用上一轮结果，选择多角度/光线预设，做连续在线编辑。`;
+      }
+    }
+
     function updateModeUI() {
       const mode = els.mode.value;
       const isScene = mode === "scene";
@@ -362,6 +485,9 @@
       els.tryonFields.classList.toggle("hidden", !isTryon);
       els.editFields.classList.toggle("hidden", !isEdit);
       els.submit.textContent = isScene ? "生成场景图" : isTryon ? "生成模特上身图" : "生成多角度/编辑图";
+      updateModeGuide();
+      renderSourcePreview();
+      syncEditInputState();
     }
 
     function applyScenePreset() {
@@ -377,9 +503,110 @@
       if (!preset) return;
       els.editNegativePrompt.value = preset.negative_prompt || "";
       els.editUseAngleLora.value = preset.use_angle_lora ? "true" : "false";
-      if (!els.editPrompt.value.trim()) {
-        els.editPrompt.value = "";
+      els.editPresetGuide.textContent = preset.prompt_template || "选择一个多角度或光线编辑方向。";
+    }
+
+    function renderProfileNote() {
+      const profile = getSelectedProfile();
+      if (!profile) {
+        els.profileNote.textContent = "可选：一键套用睡裙/服饰的推荐场景、模特和编辑策略。";
+        return;
       }
+      els.profileNote.textContent = `${profile.title}: ${profile.description}`;
+    }
+
+    function applyCatalogProfile() {
+      const profile = getSelectedProfile();
+      renderProfileNote();
+      if (!profile) {
+        updateModeGuide();
+        return;
+      }
+
+      if (profile.product_brief) {
+        els.productBrief.value = profile.product_brief;
+      }
+      if (Array.isArray(profile.scene_presets) && profile.scene_presets.length) {
+        const scenePreset = state.scenePresets.find((item) => item.name === profile.scene_presets[0]);
+        if (scenePreset) {
+          els.scenePreset.value = scenePreset.name;
+        }
+      }
+      if (Array.isArray(profile.tryon_templates) && profile.tryon_templates.length) {
+        const personTemplate = state.tryonTemplates.find((item) => item.name === profile.tryon_templates[0]);
+        if (personTemplate) {
+          els.personTemplate.value = personTemplate.name;
+        }
+      }
+      if (profile.cloth_type) {
+        els.clothType.value = profile.cloth_type;
+      }
+      if (Array.isArray(profile.edit_presets) && profile.edit_presets.length) {
+        const editPreset = state.editPresets.find((item) => item.name === profile.edit_presets[0]);
+        if (editPreset) {
+          els.editPreset.value = editPreset.name;
+        }
+      }
+      if (profile.edit_extra_prompt) {
+        els.editPrompt.value = profile.edit_extra_prompt;
+      }
+      applyScenePreset();
+      applyEditPreset();
+      updateModeGuide();
+    }
+
+    function revokeUploadPreviewUrl() {
+      if (state.uploadPreviewUrl) {
+        URL.revokeObjectURL(state.uploadPreviewUrl);
+        state.uploadPreviewUrl = "";
+      }
+    }
+
+    function renderSourcePreview() {
+      if (els.mode.value === "edit" && state.editInputOverride) {
+        revokeUploadPreviewUrl();
+        els.sourcePreview.src = state.editInputOverride.dataUrl;
+        els.inputBadge.textContent = "上一轮结果";
+        return;
+      }
+
+      const image = els.image.files[0];
+      if (!image) {
+        revokeUploadPreviewUrl();
+        els.sourcePreview.removeAttribute("src");
+        els.inputBadge.textContent = "等待选择";
+        return;
+      }
+
+      revokeUploadPreviewUrl();
+      state.uploadPreviewUrl = URL.createObjectURL(image);
+      els.sourcePreview.src = state.uploadPreviewUrl;
+      els.inputBadge.textContent = "上传商品图";
+    }
+
+    function syncEditInputState() {
+      const usingResult = els.mode.value === "edit" && !!state.editInputOverride;
+      els.editInputState.textContent = usingResult ? "当前输入：上一轮结果" : "当前输入：上传商品图";
+      els.reuseResult.disabled = !state.lastResult;
+      els.clearReuse.disabled = !state.editInputOverride;
+    }
+
+    function setLatestResult(data) {
+      const dataUrl = `data:${data.mime_type};base64,${data.image_base64}`;
+      const binary = atob(data.image_base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      state.lastResult = {
+        dataUrl,
+        blob: new Blob([bytes], { type: data.mime_type }),
+        filename: data.filename || "result.png",
+        mimeType: data.mime_type,
+      };
+      els.result.src = dataUrl;
+      els.resultBadge.textContent = data.pipeline || "已生成";
+      syncEditInputState();
     }
 
     async function fetchHealth() {
@@ -393,17 +620,22 @@
     }
 
     async function fetchPresets() {
-      const [sceneResp, tryonResp, editResp] = await Promise.all([
+      const [sceneResp, tryonResp, editResp, profileResp] = await Promise.all([
         fetch("/api/presets/scenes"),
         fetch("/api/presets/tryon-templates"),
         fetch("/api/presets/edit-presets"),
+        fetch("/api/presets/catalog-profiles"),
       ]);
       state.scenePresets = await sceneResp.json();
       state.tryonTemplates = await tryonResp.json();
       state.editPresets = await editResp.json();
+      state.catalogProfiles = await profileResp.json();
 
       els.scenePreset.innerHTML = state.scenePresets
         .map((item) => `<option value="${item.name}">${item.title}</option>`)
+        .join("");
+      els.catalogProfile.innerHTML = ['<option value="">手动配置</option>']
+        .concat(state.catalogProfiles.map((item) => `<option value="${item.name}">${item.title}</option>`))
         .join("");
       els.personTemplate.innerHTML = state.tryonTemplates
         .map((item) => `<option value="${item.name}">${item.name}</option>`)
@@ -413,6 +645,8 @@
         .join("");
       applyScenePreset();
       applyEditPreset();
+      renderProfileNote();
+      updateModeGuide();
     }
 
     function formatMeta(data) {
@@ -494,11 +728,15 @@
     }
 
     async function submitEdit() {
-      const image = els.image.files[0];
+      const image = state.editInputOverride || els.image.files[0];
       if (!image) throw new Error("请选择商品图。");
 
       const formData = new FormData();
-      formData.append("image", image);
+      if (state.editInputOverride) {
+        formData.append("image", state.editInputOverride.blob, state.editInputOverride.filename);
+      } else {
+        formData.append("image", image);
+      }
       formData.append("prompt", els.editPrompt.value.trim());
       formData.append("negative_prompt", els.editNegativePrompt.value.trim());
       formData.append("angle_preset", els.editPreset.value);
@@ -518,9 +756,29 @@
     }
 
     els.mode.addEventListener("change", updateModeUI);
+    els.catalogProfile.addEventListener("change", applyCatalogProfile);
     els.scenePreset.addEventListener("change", applyScenePreset);
     els.productBrief.addEventListener("change", applyScenePreset);
     els.editPreset.addEventListener("change", applyEditPreset);
+    els.image.addEventListener("change", () => {
+      state.editInputOverride = null;
+      renderSourcePreview();
+      syncEditInputState();
+    });
+    els.reuseResult.addEventListener("click", () => {
+      if (!state.lastResult) return;
+      state.editInputOverride = {
+        ...state.lastResult,
+        filename: `iterative-${state.lastResult.filename || "edit-source.png"}`,
+      };
+      els.mode.value = "edit";
+      updateModeUI();
+    });
+    els.clearReuse.addEventListener("click", () => {
+      state.editInputOverride = null;
+      renderSourcePreview();
+      syncEditInputState();
+    });
 
     els.submit.addEventListener("click", async () => {
       els.submit.disabled = true;
@@ -533,7 +791,7 @@
           : els.mode.value === "tryon"
             ? await submitTryon()
             : await submitEdit();
-        els.result.src = `data:${data.mime_type};base64,${data.image_base64}`;
+        setLatestResult(data);
         setStatus(`完成。pipeline=${data.pipeline}，mode=${data.generator_mode}`);
         els.meta.textContent = formatMeta(data);
       } catch (error) {
@@ -545,6 +803,7 @@
     });
 
     updateModeUI();
+    syncEditInputState();
     fetchHealth().catch((error) => setStatus(`健康检查失败: ${error.message}`));
     fetchPresets().catch((error) => setStatus(`预设加载失败: ${error.message}`));
   </script>

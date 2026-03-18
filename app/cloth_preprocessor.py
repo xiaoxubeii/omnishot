@@ -1,4 +1,5 @@
 import io
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -6,6 +7,8 @@ from PIL import Image
 from scipy import ndimage
 
 from app.comfy_client import ComfyClient
+
+LOGGER = logging.getLogger(__name__)
 
 
 def _build_cutout_workflow(image_name: str) -> dict:
@@ -76,6 +79,14 @@ def _crop_and_flatten(image: Image.Image) -> Image.Image:
     return flattened
 
 
+def _preprocess_locally(image_bytes: bytes) -> Image.Image:
+    # Fast local fallback when ComfyUI RMBG is unavailable. This does not
+    # remove the background aggressively, but it keeps try-on smoke tests and
+    # clean catalog images runnable without a live ComfyUI worker.
+    source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
+    return _crop_and_flatten(source)
+
+
 async def preprocess_cloth_image(
     *,
     comfy: ComfyClient,
@@ -84,14 +95,19 @@ async def preprocess_cloth_image(
     save_to: Path,
     timeout_seconds: int,
 ) -> Path:
-    comfy_filename = await comfy.upload_image(image_bytes, filename)
-    workflow = _build_cutout_workflow(comfy_filename)
-    result = await comfy.run_workflow(
-        workflow,
-        preferred_output_nodes=["3"],
-        timeout_seconds=timeout_seconds,
-    )
-    prepared = _crop_and_flatten(Image.open(io.BytesIO(result.image_bytes)))
+    try:
+        comfy_filename = await comfy.upload_image(image_bytes, filename)
+        workflow = _build_cutout_workflow(comfy_filename)
+        result = await comfy.run_workflow(
+            workflow,
+            preferred_output_nodes=["3"],
+            timeout_seconds=timeout_seconds,
+        )
+        prepared = _crop_and_flatten(Image.open(io.BytesIO(result.image_bytes)))
+    except Exception as exc:
+        LOGGER.warning("ComfyUI cloth preprocessing failed, falling back to local remover: %s", exc)
+        prepared = _preprocess_locally(image_bytes)
+
     save_to.parent.mkdir(parents=True, exist_ok=True)
     prepared.save(save_to)
     return save_to

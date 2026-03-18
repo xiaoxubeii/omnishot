@@ -124,6 +124,8 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   - 返回内置场景预设
 - `GET /api/presets/edit-presets`
   - 返回内置多角度/在线编辑预设
+- `GET /api/presets/catalog-profiles`
+  - 返回内置电商批量模板，例如睡裙/服饰推荐组合
 - `GET /api/presets/tryon-templates`
   - 返回内置模特模板
 
@@ -316,6 +318,15 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 - 输出落在 `data/output/smoke-edit-latest.png`
 - 运行时强制走本地缓存，不再依赖在线拉模
 - 默认会在 `Qwen Edit` 显存不足时自动降分辨率重试，避免直接 `502`
+- `2026-03-18` 完成真实 `tryon -> tryon_angle` 组合测试
+- 输出示例：
+  - `data/output/real-tryon-woman_1.png`
+  - `data/output/real-tryon-angle-woman_1-left45.png`
+
+说明：
+
+- `try-on` 仍然优先走 ComfyUI RMBG 做商品预处理
+- 如果 ComfyUI 当前不可用，会自动退回到本地快速白底规范化兜底，不再直接因为预处理失败而中断整条链路
 
 9. 一键看当前状态（服务健康 + FLUX 就绪度）：
 
@@ -441,6 +452,41 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --tryon-angle-presets camera_left_45
 ```
 
+如果你想直接套用电商模板，不手写一长串参数，可以用 `--profile`：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/catalog_generate.py \
+  --once \
+  --input-dir data/incoming-products \
+  --output-dir data/catalog-output \
+  --profile sleepwear_luxury
+```
+
+当前内置 profile：
+
+- `sleepwear_luxury`
+  - 睡裙 / 丝绸 / 缎面家居服
+- `lingerie_editorial`
+  - 内衣 / 贴身服饰
+- `apparel_catalog`
+  - 常规女装 / 连衣裙 / 目录图
+
+也可以在 profile 的基础上，局部覆写：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/catalog_generate.py \
+  --once \
+  --input-dir data/incoming-products \
+  --output-dir data/catalog-output \
+  --profile sleepwear_luxury \
+  --scene-presets hotel_suite_warmth \
+  --tryon-templates woman_1 \
+  --edit-presets camera_left_45 \
+  --tryon-angle-presets camera_left_45
+```
+
 输出会分成：
 
 - `data/catalog-output/scenes/`
@@ -451,11 +497,24 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 
 说明：
 
+- `--profile`
+  - 套用一组预定义的产品描述、场景、模特、编辑预设和附加 prompt
+- `--scene-presets`
+  - 精确指定要跑哪些场景预设；传了之后会覆盖 `scene-count` 或 profile 默认场景
 - `--edit-presets`
   - 作用在原始商品图上，生成多角度或在线编辑图
 - `--tryon-angle-presets`
   - 先跑 `try-on`，再对模特上身结果做二次角度编辑
 - `tryon_angle` 的 prompt 会自动附加“保持同一模特和同一服装”的约束
+
+## 在线编辑 DEMO
+
+[`demo.html`](/home/cheng/workspace/ai-phantom-studio-demo/demo.html) 现在支持：
+
+- 选择 `Scene / Try-On / Edit` 三种模式
+- 选择电商模板 profile，自动带入推荐配置
+- 双预览：左侧看输入图，右侧看输出图
+- `Edit` 模式下把当前结果直接设为下一轮输入，连续在线编辑
 
 如果你只想保留旧行为，也可以不传 `--edit-presets` 和 `--tryon-angle-presets`，脚本会只生成 `scene + try-on`。
 

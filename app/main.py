@@ -17,7 +17,7 @@ from app.cloth_preprocessor import preprocess_cloth_image
 from app.comfy_client import ComfyClient
 from app.config import ROOT_DIR, get_settings
 from app.edit_runner import run_qwen_edit
-from app.presets import EDIT_PRESETS, SCENE_PRESETS
+from app.presets import CATALOG_PROFILES, EDIT_PRESETS, SCENE_PRESETS
 from app.schemas import (
     EditJsonRequest,
     GenerateJsonRequest,
@@ -96,6 +96,11 @@ async def get_scene_presets() -> list[dict]:
 @app.get("/api/presets/edit-presets")
 async def get_edit_presets() -> list[dict]:
     return EDIT_PRESETS
+
+
+@app.get("/api/presets/catalog-profiles")
+async def get_catalog_profiles() -> list[dict]:
+    return CATALOG_PROFILES
 
 
 @app.get("/api/presets/tryon-templates")

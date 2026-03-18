@@ -153,3 +153,79 @@ EDIT_PRESETS = [
         "use_angle_lora": False,
     },
 ]
+
+
+CATALOG_PROFILES = [
+    {
+        "name": "sleepwear_luxury",
+        "title": "睡裙电商主推",
+        "description": (
+            "针对丝绸/缎面睡裙、吊带裙、居家轻奢睡衣。优先输出卧室、露台、酒店暖光和模特上身多角度图。"
+        ),
+        "product_brief": "premium silk nightdress, satin slip dress, luxury sleepwear ecommerce product photo",
+        "scene_presets": [
+            "sunset_bedroom_window",
+            "morning_balcony_fresh",
+            "hotel_suite_warmth",
+            "vanity_evening_glamour",
+        ],
+        "tryon_templates": ["woman_1", "woman_2"],
+        "edit_presets": ["editorial_light_shift", "camera_left_45", "camera_right_45", "close_up_detail"],
+        "tryon_angle_presets": ["camera_left_45", "camera_right_45"],
+        "cloth_type": "overall",
+        "edit_extra_prompt": (
+            "Preserve the exact same sleepwear silhouette, hem length, neckline, lace trim, and silky drape. "
+            "Emphasize refined fabric sheen and premium ecommerce styling."
+        ),
+        "tryon_angle_extra_prompt": (
+            "Maintain graceful sleepwear presentation, elegant drape, clean premium studio styling, "
+            "and realistic high-end fashion lighting."
+        ),
+    },
+    {
+        "name": "lingerie_editorial",
+        "title": "内衣 / 贴身服饰",
+        "description": (
+            "用于更强调材质、贴身剪裁和灯光轮廓的内衣或性感家居服商品图。"
+        ),
+        "product_brief": "premium lingerie or intimate apparel ecommerce product photo with refined material detail",
+        "scene_presets": [
+            "studio_softbox_catalog",
+            "vanity_evening_glamour",
+            "rainy_window_storytelling",
+        ],
+        "tryon_templates": ["woman_1"],
+        "edit_presets": ["editorial_light_shift", "close_up_detail", "camera_left_45"],
+        "tryon_angle_presets": ["camera_left_45", "close_up_detail"],
+        "cloth_type": "upper",
+        "edit_extra_prompt": (
+            "Keep the exact same garment fit, strap construction, cup shape, lace placement, and premium material behavior."
+        ),
+        "tryon_angle_extra_prompt": (
+            "Keep the same model identity and the same intimate garment fit. Focus on elegance, realism, and clean editorial lighting."
+        ),
+    },
+    {
+        "name": "apparel_catalog",
+        "title": "常规服饰目录",
+        "description": (
+            "适合普通女装、上装、连衣裙的稳定目录图批量生成，兼顾场景图、模特图和多角度。"
+        ),
+        "product_brief": "premium apparel ecommerce product photo with clean retail styling",
+        "scene_presets": [
+            "studio_softbox_catalog",
+            "morning_balcony_fresh",
+            "hotel_suite_warmth",
+        ],
+        "tryon_templates": ["woman_1", "woman_2", "woman_3"],
+        "edit_presets": ["camera_left_45", "camera_right_45", "editorial_light_shift"],
+        "tryon_angle_presets": ["camera_left_45", "camera_right_45"],
+        "cloth_type": "overall",
+        "edit_extra_prompt": (
+            "Keep the exact same garment identity, retail-ready shape, stitching, and fabric behavior."
+        ),
+        "tryon_angle_extra_prompt": (
+            "Retain the same model, same garment fit, same proportions, and same commercial retail styling."
+        ),
+    },
+]

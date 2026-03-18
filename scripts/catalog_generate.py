@@ -11,7 +11,9 @@ from urllib import request
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+DEFAULT_PRODUCT_BRIEF = "premium ecommerce apparel product"
 DEFAULT_SCENE_COUNT = 4
+DEFAULT_SCENE_PRESETS = ""
 DEFAULT_TRYON_TEMPLATES = "woman_1,woman_2,woman_3"
 DEFAULT_EDIT_PRESETS = ""
 DEFAULT_TRYON_ANGLE_PRESETS = ""
@@ -30,11 +32,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input-dir", type=Path, default=ROOT_DIR / "data" / "incoming-products")
     parser.add_argument("--output-dir", type=Path, default=ROOT_DIR / "data" / "catalog-output")
     parser.add_argument(
+        "--profile",
+        default="",
+        help="Built-in catalog profile name from /api/presets/catalog-profiles, e.g. sleepwear_luxury.",
+    )
+    parser.add_argument(
         "--product-brief",
-        default="premium ecommerce apparel product",
+        default=DEFAULT_PRODUCT_BRIEF,
         help="Injected into scene preset prompt templates.",
     )
     parser.add_argument("--scene-count", type=int, default=DEFAULT_SCENE_COUNT)
+    parser.add_argument(
+        "--scene-presets",
+        default=DEFAULT_SCENE_PRESETS,
+        help="Comma-separated scene preset names. Empty means use scene-count or profile defaults.",
+    )
     parser.add_argument("--tryon-templates", default=DEFAULT_TRYON_TEMPLATES)
     parser.add_argument("--cloth-type", default="overall", choices=["upper", "lower", "overall"])
     parser.add_argument(
@@ -155,6 +167,29 @@ def select_presets(all_presets: list[dict], names: list[str]) -> list[dict]:
     return selected
 
 
+def select_profile(all_profiles: list[dict], profile_name: str) -> dict | None:
+    profile_name = profile_name.strip()
+    if not profile_name:
+        return None
+    indexed = index_presets(all_profiles)
+    profile = indexed.get(profile_name)
+    if profile is None:
+        raise ValueError(f"Unknown profile: {profile_name}")
+    return profile
+
+
+def choose_value(current: str, default: str, profile_value: str | None) -> str:
+    if current != default:
+        return current
+    return current if profile_value is None else str(profile_value)
+
+
+def choose_names(current: str, default: str, profile_values: list[str] | None) -> list[str]:
+    if current != default:
+        return parse_names(current)
+    return [str(item).strip() for item in (profile_values or []) if str(item).strip()]
+
+
 def render_product_edit_prompt(preset: dict, extra_prompt: str) -> str:
     parts = [
         str(preset.get("prompt_template", "")).strip(),
@@ -178,11 +213,35 @@ def write_manifest(path: Path, record: dict) -> None:
 
 
 def process_once(args: argparse.Namespace) -> None:
-    scenes = api_get_json(f"{args.api_base_url}/api/presets/scenes", timeout=args.timeout)[: args.scene_count]
+    scenes_all = api_get_json(f"{args.api_base_url}/api/presets/scenes", timeout=args.timeout)
     edit_presets_all = api_get_json(f"{args.api_base_url}/api/presets/edit-presets", timeout=args.timeout)
-    tryon_templates = parse_names(args.tryon_templates)
-    edit_presets = select_presets(edit_presets_all, parse_names(args.edit_presets))
-    tryon_angle_presets = select_presets(edit_presets_all, parse_names(args.tryon_angle_presets))
+    catalog_profiles = api_get_json(f"{args.api_base_url}/api/presets/catalog-profiles", timeout=args.timeout)
+    profile = select_profile(catalog_profiles, args.profile)
+
+    product_brief = choose_value(args.product_brief, DEFAULT_PRODUCT_BRIEF, profile.get("product_brief") if profile else None)
+    cloth_type = choose_value(args.cloth_type, "overall", profile.get("cloth_type") if profile else None)
+    scene_names = choose_names(args.scene_presets, DEFAULT_SCENE_PRESETS, profile.get("scene_presets") if profile else None)
+    tryon_templates = choose_names(args.tryon_templates, DEFAULT_TRYON_TEMPLATES, profile.get("tryon_templates") if profile else None)
+    edit_preset_names = choose_names(args.edit_presets, DEFAULT_EDIT_PRESETS, profile.get("edit_presets") if profile else None)
+    tryon_angle_preset_names = choose_names(
+        args.tryon_angle_presets,
+        DEFAULT_TRYON_ANGLE_PRESETS,
+        profile.get("tryon_angle_presets") if profile else None,
+    )
+    edit_extra_prompt = choose_value(args.edit_extra_prompt, "", profile.get("edit_extra_prompt") if profile else None)
+    tryon_angle_extra_prompt = choose_value(
+        args.tryon_angle_extra_prompt,
+        "",
+        profile.get("tryon_angle_extra_prompt") if profile else None,
+    )
+
+    if scene_names:
+        scenes = select_presets(scenes_all, scene_names)
+    else:
+        scenes = scenes_all[: args.scene_count]
+
+    edit_presets = select_presets(edit_presets_all, edit_preset_names)
+    tryon_angle_presets = select_presets(edit_presets_all, tryon_angle_preset_names)
 
     images = discover_images(args.input_dir)
     manifest_path = args.output_dir / "manifest.jsonl"
@@ -198,7 +257,7 @@ def process_once(args: argparse.Namespace) -> None:
             if job_key in processed_keys:
                 continue
             payload = {
-                "prompt": render_scene_prompt(scene["prompt_template"], args.product_brief),
+                "prompt": render_scene_prompt(scene["prompt_template"], product_brief),
                 "negative_prompt": scene["negative_prompt"],
                 "seed": seed,
                 "filename": image_path.name,
@@ -240,7 +299,7 @@ def process_once(args: argparse.Namespace) -> None:
                 "filename": image_path.name,
                 "image_base64": image_b64,
                 "angle_preset": preset["name"],
-                "prompt": render_product_edit_prompt(preset, args.edit_extra_prompt),
+                "prompt": render_product_edit_prompt(preset, edit_extra_prompt),
                 "negative_prompt": preset.get("negative_prompt", ""),
                 "seed": seed,
                 "steps": 8,
@@ -291,7 +350,7 @@ def process_once(args: argparse.Namespace) -> None:
                     "filename": image_path.name,
                     "image_base64": image_b64,
                     "person_template": template_name,
-                    "cloth_type": args.cloth_type,
+                    "cloth_type": cloth_type,
                     "seed": seed,
                     "steps": 30,
                     "guidance": 2.5,
@@ -347,7 +406,7 @@ def process_once(args: argparse.Namespace) -> None:
                     "filename": f"{image_path.stem}__{template_name}.png",
                     "image_base64": tryon_source_b64,
                     "angle_preset": preset["name"],
-                    "prompt": render_tryon_angle_prompt(preset, args.tryon_angle_extra_prompt),
+                    "prompt": render_tryon_angle_prompt(preset, tryon_angle_extra_prompt),
                     "negative_prompt": preset.get("negative_prompt", ""),
                     "seed": seed,
                     "steps": 8,
