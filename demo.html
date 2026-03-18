@@ -186,6 +186,34 @@
       max-width: 100%;
       max-height: 840px;
     }
+    .batchResults {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+    }
+    .batchCard {
+      border-radius: 18px;
+      overflow: hidden;
+      border: 1px solid rgba(48, 31, 14, 0.1);
+      background: rgba(255,255,255,0.82);
+    }
+    .batchCard img {
+      width: 100%;
+      display: block;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      background: rgba(255,255,255,0.5);
+    }
+    .batchMeta {
+      display: grid;
+      gap: 6px;
+      padding: 12px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .batchMeta strong {
+      color: var(--text);
+    }
     .badge {
       display: inline-flex;
       align-items: center;
@@ -222,6 +250,7 @@
             <option value="scene">Scene 场景图</option>
             <option value="tryon">Try-On 模特上身</option>
             <option value="edit">Edit 多角度 / 在线编辑</option>
+            <option value="batch">Batch 批量电商出图</option>
           </select>
         </div>
 
@@ -233,9 +262,17 @@
           <div id="profileNote" class="note">可选：一键套用睡裙/服饰的推荐场景、模特和编辑策略。</div>
         </div>
 
-        <div class="row">
+        <div id="singleImageRow" class="row">
           <label for="image">商品图</label>
           <input id="image" name="image" type="file" accept="image/*" required>
+        </div>
+
+        <div id="batchFields" class="hidden">
+          <div class="row">
+            <label for="batchImages">批量商品图</label>
+            <input id="batchImages" name="batchImages" type="file" accept="image/*" multiple>
+          </div>
+          <div id="batchNote" class="note">批量模式会按当前电商模板顺序执行所有场景、商品角度、模特上身和模特多角度任务。</div>
         </div>
 
         <div id="modeGuide" class="guide">上传商品图后按当前模式生成。</div>
@@ -386,6 +423,7 @@
           </div>
         </div>
         <div id="meta" class="meta">尚未生成。</div>
+        <div id="batchResults" class="batchResults hidden"></div>
       </section>
     </div>
   </div>
@@ -399,13 +437,18 @@
       lastResult: null,
       editInputOverride: null,
       uploadPreviewUrl: "",
+      batchEntries: [],
     };
 
     const els = {
       mode: document.getElementById("mode"),
       catalogProfile: document.getElementById("catalogProfile"),
       profileNote: document.getElementById("profileNote"),
+      singleImageRow: document.getElementById("singleImageRow"),
       image: document.getElementById("image"),
+      batchImages: document.getElementById("batchImages"),
+      batchFields: document.getElementById("batchFields"),
+      batchNote: document.getElementById("batchNote"),
       personImage: document.getElementById("personImage"),
       productBrief: document.getElementById("productBrief"),
       scenePreset: document.getElementById("scenePreset"),
@@ -437,6 +480,7 @@
       status: document.getElementById("status"),
       result: document.getElementById("result"),
       resultBadge: document.getElementById("resultBadge"),
+      batchResults: document.getElementById("batchResults"),
       meta: document.getElementById("meta"),
       sceneFields: document.getElementById("sceneFields"),
       tryonFields: document.getElementById("tryonFields"),
@@ -450,6 +494,32 @@
 
     function getSelectedProfile() {
       return state.catalogProfiles.find((item) => item.name === els.catalogProfile.value) || null;
+    }
+
+    function indexByName(items) {
+      return new Map(items.map((item) => [item.name, item]));
+    }
+
+    function resolveProfilePlan(profile) {
+      const sceneMap = indexByName(state.scenePresets);
+      const editMap = indexByName(state.editPresets);
+      return {
+        scenes: (profile?.scene_presets || []).map((name) => sceneMap.get(name)).filter(Boolean),
+        edits: (profile?.edit_presets || []).map((name) => editMap.get(name)).filter(Boolean),
+        tryonTemplates: profile?.tryon_templates || [],
+        tryonAngles: (profile?.tryon_angle_presets || []).map((name) => editMap.get(name)).filter(Boolean),
+      };
+    }
+
+    function renderBatchNote() {
+      const profile = getSelectedProfile();
+      if (!profile) {
+        els.batchNote.textContent = "批量模式需要先选择一个电商模板 profile。";
+        return;
+      }
+      const plan = resolveProfilePlan(profile);
+      const perFileCount = plan.scenes.length + plan.edits.length + plan.tryonTemplates.length + (plan.tryonTemplates.length * plan.tryonAngles.length);
+      els.batchNote.textContent = `${profile.title}: 单张商品图预计输出 ${perFileCount} 张图（${plan.scenes.length} scene / ${plan.edits.length} edit / ${plan.tryonTemplates.length} tryon / ${plan.tryonTemplates.length * plan.tryonAngles.length} tryon_angle）。`;
     }
 
     function renderBadges(health) {
@@ -471,8 +541,10 @@
         els.modeGuide.textContent = `${prefix}上传商品图，选择场景预设，生成静物场景和光线变化图。`;
       } else if (mode === "tryon") {
         els.modeGuide.textContent = `${prefix}上传商品图，选择模特模板或自定义模特，生成真实上身展示图。`;
-      } else {
+      } else if (mode === "edit") {
         els.modeGuide.textContent = `${prefix}上传商品图或复用上一轮结果，选择多角度/光线预设，做连续在线编辑。`;
+      } else {
+        els.modeGuide.textContent = `${prefix}批量上传多张商品图，按模板顺序依次生成整套电商素材。`;
       }
     }
 
@@ -481,11 +553,22 @@
       const isScene = mode === "scene";
       const isTryon = mode === "tryon";
       const isEdit = mode === "edit";
+      const isBatch = mode === "batch";
+      els.singleImageRow.classList.toggle("hidden", isBatch);
+      els.batchFields.classList.toggle("hidden", !isBatch);
       els.sceneFields.classList.toggle("hidden", !isScene);
       els.tryonFields.classList.toggle("hidden", !isTryon);
       els.editFields.classList.toggle("hidden", !isEdit);
-      els.submit.textContent = isScene ? "生成场景图" : isTryon ? "生成模特上身图" : "生成多角度/编辑图";
+      els.batchResults.classList.toggle("hidden", !isBatch);
+      els.submit.textContent = isScene
+        ? "生成场景图"
+        : isTryon
+          ? "生成模特上身图"
+          : isEdit
+            ? "生成多角度/编辑图"
+            : "批量生成整套素材";
       updateModeGuide();
+      renderBatchNote();
       renderSourcePreview();
       syncEditInputState();
     }
@@ -553,6 +636,7 @@
       applyScenePreset();
       applyEditPreset();
       updateModeGuide();
+      renderBatchNote();
     }
 
     function revokeUploadPreviewUrl() {
@@ -570,7 +654,7 @@
         return;
       }
 
-      const image = els.image.files[0];
+      const image = els.mode.value === "batch" ? els.batchImages.files[0] : els.image.files[0];
       if (!image) {
         revokeUploadPreviewUrl();
         els.sourcePreview.removeAttribute("src");
@@ -581,7 +665,7 @@
       revokeUploadPreviewUrl();
       state.uploadPreviewUrl = URL.createObjectURL(image);
       els.sourcePreview.src = state.uploadPreviewUrl;
-      els.inputBadge.textContent = "上传商品图";
+      els.inputBadge.textContent = els.mode.value === "batch" ? "批量首图" : "上传商品图";
     }
 
     function syncEditInputState() {
@@ -607,6 +691,54 @@
       els.result.src = dataUrl;
       els.resultBadge.textContent = data.pipeline || "已生成";
       syncEditInputState();
+    }
+
+    function resetBatchResults() {
+      state.batchEntries = [];
+      els.batchResults.innerHTML = "";
+      els.meta.textContent = "批量任务准备中。";
+    }
+
+    function appendBatchResult(entry) {
+      state.batchEntries.push(entry);
+      const card = document.createElement("article");
+      card.className = "batchCard";
+      card.innerHTML = `
+        <img src="${entry.imageUrl}" alt="${entry.variant}">
+        <div class="batchMeta">
+          <strong>${entry.type}</strong>
+          <span>${entry.variant}</span>
+          <code>${entry.generatorMode}</code>
+          <span>${entry.source}</span>
+        </div>
+      `;
+      els.batchResults.appendChild(card);
+    }
+
+    function buildBatchSummary(total, fileCount) {
+      const counts = state.batchEntries.reduce((acc, item) => {
+        acc[item.type] = (acc[item.type] || 0) + 1;
+        return acc;
+      }, {});
+      return [
+        `批量完成：${state.batchEntries.length}/${total}`,
+        `商品图数量：${fileCount}`,
+        `scene: ${counts.scene || 0}`,
+        `edit: ${counts.edit || 0}`,
+        `tryon: ${counts.tryon || 0}`,
+        `tryon_angle: ${counts.tryon_angle || 0}`,
+      ].join("\n");
+    }
+
+    async function fileToBase64(file) {
+      const buffer = await file.arrayBuffer();
+      let binary = "";
+      const bytes = new Uint8Array(buffer);
+      const chunkSize = 0x8000;
+      for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+      }
+      return btoa(binary);
     }
 
     async function fetchHealth() {
@@ -646,6 +778,7 @@
       applyScenePreset();
       applyEditPreset();
       renderProfileNote();
+      renderBatchNote();
       updateModeGuide();
     }
 
@@ -679,6 +812,15 @@
         }
         throw error;
       }
+    }
+
+    async function postJson(url, payload) {
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      return await readApiPayload(response);
     }
 
     async function submitScene() {
@@ -755,6 +897,122 @@
       return await readApiPayload(response);
     }
 
+    async function submitBatch() {
+      const files = Array.from(els.batchImages.files || []);
+      const profile = getSelectedProfile();
+      if (!files.length) throw new Error("请至少选择一张商品图。");
+      if (!profile) throw new Error("批量模式需要先选择一个电商模板。");
+
+      const plan = resolveProfilePlan(profile);
+      if (!plan.scenes.length && !plan.edits.length && !plan.tryonTemplates.length) {
+        throw new Error("当前模板没有可执行的批量项。");
+      }
+
+      resetBatchResults();
+
+      const totalPerFile = plan.scenes.length + plan.edits.length + plan.tryonTemplates.length + (plan.tryonTemplates.length * plan.tryonAngles.length);
+      const totalTasks = totalPerFile * files.length;
+      let completed = 0;
+      let seed = 1000;
+
+      const pushResult = (data, type, variant, sourceName) => {
+        setLatestResult(data);
+        appendBatchResult({
+          type,
+          variant,
+          source: sourceName,
+          generatorMode: data.generator_mode,
+          imageUrl: data.output_url || `data:${data.mime_type};base64,${data.image_base64}`,
+        });
+      };
+
+      for (const file of files) {
+        const imageBase64 = await fileToBase64(file);
+        const sourceName = file.name;
+
+        for (const scene of plan.scenes) {
+          setStatus(`批量中 ${completed + 1}/${totalTasks}: ${sourceName} -> scene/${scene.name}`);
+          const data = await postJson("/generate/scene", {
+            filename: file.name,
+            image_base64: imageBase64,
+            prompt: scene.prompt_template.replace("{product_brief}", profile.product_brief || els.productBrief.value.trim() || "premium ecommerce product"),
+            negative_prompt: scene.negative_prompt || "",
+            seed,
+          });
+          pushResult(data, "scene", scene.name, sourceName);
+          completed += 1;
+          seed += 1;
+        }
+
+        for (const preset of plan.edits) {
+          setStatus(`批量中 ${completed + 1}/${totalTasks}: ${sourceName} -> edit/${preset.name}`);
+          const promptParts = [preset.prompt_template, profile.edit_extra_prompt || ""].filter(Boolean);
+          const data = await postJson("/generate/edit", {
+            filename: file.name,
+            image_base64: imageBase64,
+            angle_preset: preset.name,
+            prompt: promptParts.join("\n"),
+            negative_prompt: preset.negative_prompt || "",
+            seed,
+            steps: 8,
+            true_cfg_scale: 1.0,
+            use_angle_lora: !!preset.use_angle_lora,
+            use_lightning: true,
+          });
+          pushResult(data, "edit", preset.name, sourceName);
+          completed += 1;
+          seed += 1;
+        }
+
+        for (const templateName of plan.tryonTemplates) {
+          setStatus(`批量中 ${completed + 1}/${totalTasks}: ${sourceName} -> tryon/${templateName}`);
+          const tryonData = await postJson("/generate/tryon", {
+            filename: file.name,
+            image_base64: imageBase64,
+            person_template: templateName,
+            cloth_type: profile.cloth_type || "overall",
+            seed,
+            steps: 30,
+            guidance: 2.5,
+            width: 768,
+            height: 1024,
+          });
+          pushResult(tryonData, "tryon", templateName, sourceName);
+          completed += 1;
+          seed += 1;
+
+          for (const preset of plan.tryonAngles) {
+            setStatus(`批量中 ${completed + 1}/${totalTasks}: ${sourceName} -> tryon_angle/${templateName}/${preset.name}`);
+            const promptParts = [
+              preset.prompt_template,
+              "Keep the exact same model identity, face, hairstyle, body proportions, garment fit, pattern, trim, color, and silhouette. Only change the camera viewpoint, framing, and lighting in a photorealistic premium ecommerce fashion photo.",
+              profile.tryon_angle_extra_prompt || "",
+            ].filter(Boolean);
+            const data = await postJson("/generate/edit", {
+              filename: `${file.name.replace(/\.[^.]+$/, "")}__${templateName}.png`,
+              image_base64: tryonData.image_base64,
+              angle_preset: preset.name,
+              prompt: promptParts.join("\n"),
+              negative_prompt: preset.negative_prompt || "",
+              seed,
+              steps: 8,
+              true_cfg_scale: 1.0,
+              use_angle_lora: !!preset.use_angle_lora,
+              use_lightning: true,
+            });
+            pushResult(data, "tryon_angle", `${templateName} / ${preset.name}`, sourceName);
+            completed += 1;
+            seed += 1;
+          }
+        }
+      }
+
+      els.meta.textContent = buildBatchSummary(totalTasks, files.length);
+      setStatus(`批量完成，共输出 ${state.batchEntries.length} 张结果。`);
+      els.resultBadge.textContent = "批量完成";
+      return { pipeline: "batch", generator_mode: "multi-engine", filename: `${files.length} files`, output_url: "", mime_type: "", image_base64: "" };
+    }
+
     els.mode.addEventListener("change", updateModeUI);
     els.catalogProfile.addEventListener("change", applyCatalogProfile);
     els.scenePreset.addEventListener("change", applyScenePreset);
@@ -764,6 +1022,10 @@
       state.editInputOverride = null;
       renderSourcePreview();
       syncEditInputState();
+    });
+    els.batchImages.addEventListener("change", () => {
+      renderSourcePreview();
+      renderBatchNote();
     });
     els.reuseResult.addEventListener("click", () => {
       if (!state.lastResult) return;
@@ -786,14 +1048,18 @@
       els.meta.textContent = "生成中。";
 
       try {
-        const data = els.mode.value === "scene"
-          ? await submitScene()
-          : els.mode.value === "tryon"
-            ? await submitTryon()
-            : await submitEdit();
-        setLatestResult(data);
-        setStatus(`完成。pipeline=${data.pipeline}，mode=${data.generator_mode}`);
-        els.meta.textContent = formatMeta(data);
+        if (els.mode.value === "batch") {
+          await submitBatch();
+        } else {
+          const data = els.mode.value === "scene"
+            ? await submitScene()
+            : els.mode.value === "tryon"
+              ? await submitTryon()
+              : await submitEdit();
+          setLatestResult(data);
+          setStatus(`完成。pipeline=${data.pipeline}，mode=${data.generator_mode}`);
+          els.meta.textContent = formatMeta(data);
+        }
       } catch (error) {
         setStatus(`失败: ${error.message}`);
         els.meta.textContent = "请检查 API、ComfyUI、CatVTON、Qwen Edit 依赖和模型下载状态。";

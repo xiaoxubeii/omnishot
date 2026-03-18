@@ -551,6 +551,7 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 - 选择电商模板 profile，自动带入推荐配置
 - 双预览：左侧看输入图，右侧看输出图
 - `Edit` 模式下把当前结果直接设为下一轮输入，连续在线编辑
+- `Batch` 模式下上传多张商品图，按 profile 顺序逐张生成整套电商素材
 
 如果你只想保留旧行为，也可以不传 `--edit-presets` 和 `--tryon-angle-presets`，脚本会只生成 `scene + try-on`。
 
