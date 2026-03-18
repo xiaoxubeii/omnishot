@@ -518,6 +518,19 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 - `data/catalog-output/tryon-angle/`
 - `data/catalog-output/manifest.jsonl`
 
+如果你想给某一批结果自动生成总览页和 contact sheet：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/render_batch_gallery.py \
+  --output-dir data/catalog-output
+```
+
+会额外生成：
+
+- `data/catalog-output/contact-sheet.png`
+- `data/catalog-output/gallery.html`
+
 说明：
 
 - `--profile`
