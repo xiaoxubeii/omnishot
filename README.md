@@ -28,9 +28,74 @@ AI 幻影影棚 DEMO
 git submodule update --init --recursive
 ```
 
+## MCP 服务器
+
+这个仓库现在包含一个 MCP server，用来把本地 Omnishot 能力暴露给支持 MCP 的客户端。
+
+暴露的工具：
+
+- `health`
+- `list_scene_presets`
+- `list_edit_presets`
+- `list_tryon_templates`
+- `generate_scene`
+- `generate_edit`
+- `generate_tryon`
+- `run_batch_generate_once`
+- `run_catalog_batch_once`
+
+暴露的资源：
+
+- `omnishot://readme`
+- `omnishot://health`
+- `omnishot://scene-presets`
+- `omnishot://edit-presets`
+- `omnishot://tryon-templates`
+
+### stdio 模式
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+./scripts/start_mcp_server.sh --transport stdio
+```
+
+### Streamable HTTP 模式
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+./scripts/start_mcp_server.sh \
+  --transport streamable-http \
+  --host 127.0.0.1 \
+  --port 8765 \
+  --streamable-http-path /mcp
+```
+
+### 本地烟测
+
+先启动 FastAPI：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python -m uvicorn app.main:app --app-dir /home/cheng/workspace/ai-phantom-studio-demo --host 127.0.0.1 --port 8000
+```
+
+再执行：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/smoke_mcp_server.py --api-base-url http://127.0.0.1:8000
+```
+
+说明：
+
+- MCP server 是 Omnishot API 的协议适配层
+- 要实际生成图片，仍然需要先启动本地：
+  - `FastAPI`
+  - `ComfyUI`
+
 ## 当前推荐流程
 
-截至 `2026-03-17`，这个仓库已经明确拆成两条链路：
+截至 `2026-03-18`，这个仓库已经明确拆成三条链路：
 
 1. `Scene` 静物场景图
    - `BiRefNet-HR-matting` 抠图
@@ -39,8 +104,13 @@ git submodule update --init --recursive
 2. `Try-On` 模特上身图
    - `CatVTON`
    - 使用内置模特模板或自定义模特图
+3. `Edit` 多角度和在线编辑
+   - `Qwen/Qwen-Image-Edit-2509`
+   - `lightx2v/Qwen-Image-Lightning`
+   - `dx8152/Qwen-Edit-2509-Multiple-angles`
+   - 用于相机角度变化、近景细节、仅改光线和自定义在线编辑
 
-这样做的原因很简单：同一个通用生图工作流不可能同时把“商品主体不变”和“模特上身自然”两件事都做好。
+这样做的原因很简单：同一个通用生图工作流不可能同时把“商品主体不变”“模特上身自然”“多角度重构”三件事都做好。
 
 ## 新接口
 
@@ -48,8 +118,12 @@ git submodule update --init --recursive
   - 生成静物场景图
 - `POST /generate/tryon`
   - 生成模特上身图
+- `POST /generate/edit`
+  - 生成 Qwen 多角度图或在线编辑图
 - `GET /api/presets/scenes`
   - 返回内置场景预设
+- `GET /api/presets/edit-presets`
+  - 返回内置多角度/在线编辑预设
 - `GET /api/presets/tryon-templates`
   - 返回内置模特模板
 
@@ -199,11 +273,41 @@ FLUX_GGUF_FILE=flux1-dev-Q5_0.gguf ./scripts/install_required_models.sh
 - RMBG-2.0 本地模型文件
 - DepthAnything 预处理模型缓存（避免运行时在线下载）
 
+7.5. 预下载 Qwen Edit 多角度模型和 LoRA：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+./scripts/install_qwen_edit_models.sh
+```
+
+说明：
+
+- 默认会预下载 `Qwen/Qwen-Image-Edit-2509`
+- 同时下载 `Qwen-Image-Lightning` 和 `镜头转换.safetensors`
+- 默认走 `HF_ENDPOINT=https://hf-mirror.com`
+- 模型缓存默认落在 `data/hf-cache/`
+
+如果你只想先下载两个 LoRA，不预下载底模：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+DOWNLOAD_BASE_MODEL=false ./scripts/install_qwen_edit_models.sh
+```
+
 8. 运行一次端到端冒烟测试（调用 `/generate` 并落地结果图）：
 
 ```bash
 cd /home/cheng/workspace/ai-phantom-studio-demo
 .venv/bin/python scripts/smoke_generate.py
+```
+
+Qwen Edit 烟测：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/smoke_edit.py \
+  --image data/incoming-products/your-product.png \
+  --angle-preset camera_left_45
 ```
 
 9. 一键看当前状态（服务健康 + FLUX 就绪度）：
@@ -223,6 +327,7 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 
 - 扫描输入目录中的商品图
 - 按场景提示词批量调用 `/generate`
+- 可选批量调用 `/generate/edit` 生成多角度或在线编辑结果
 - 自动把结果图保存到输出目录
 - 记录任务清单到 `manifest.jsonl`
 - 支持 watch 模式持续监听新文件
@@ -244,6 +349,28 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --output-dir data/batch-output
 ```
 
+### 单次批量运行多角度 / 在线编辑
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/batch_generate.py \
+  --once \
+  --job-type edit \
+  --input-dir data/incoming-products \
+  --output-dir data/batch-output
+```
+
+### 同时批量运行场景图 + 多角度编辑
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/batch_generate.py \
+  --once \
+  --job-type both \
+  --input-dir data/incoming-products \
+  --output-dir data/batch-output
+```
+
 ### 持续监听模式
 
 ```bash
@@ -255,6 +382,36 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 ```
 
 你可以把新睡裙图不断放入 `data/incoming-products/`，脚本会自动处理并生成多场景成图。
+
+如果你要自定义多角度/编辑任务，传一个 `edits.json`：
+
+```json
+[
+  {
+    "name": "left_45",
+    "angle_preset": "camera_left_45",
+    "prompt": "same exact product, premium ecommerce realism",
+    "negative_prompt": "different product, blurry, watermark"
+  },
+  {
+    "name": "top_down_detail",
+    "angle_preset": "top_down",
+    "prompt": "same exact product, premium detail emphasis"
+  }
+]
+```
+
+然后执行：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+.venv/bin/python scripts/batch_generate.py \
+  --once \
+  --job-type edit \
+  --edits-file workflows/incoming/edits.json \
+  --input-dir data/incoming-products \
+  --output-dir data/batch-output
+```
 
 ## 一次性生成场景图 + 模特图
 

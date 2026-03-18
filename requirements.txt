@@ -6,4 +6,9 @@ websockets
 jinja2
 pydantic-settings
 pillow
-
+diffusers>=0.36
+accelerate>=1.0
+transformers>=4.54
+huggingface_hub>=0.34
+sentencepiece
+mcp[cli]>=1.26.0,<2

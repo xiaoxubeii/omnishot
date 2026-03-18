@@ -156,7 +156,7 @@
   <div class="wrap">
     <section class="hero">
       <h1>AI 幻影影棚</h1>
-      <p>同一个商品，拆成两条生成引擎处理。`Scene` 用于静物换场景和光影，`Try-On` 用于模特上身。这样才能同时保住商品主体一致性和商业展示质量。</p>
+      <p>同一个商品，拆成三条生成引擎处理。`Scene` 用于静物换场景和光影，`Try-On` 用于模特上身，`Edit` 用于 Qwen 多角度和在线编辑。这样才能同时保住商品主体一致性和商业展示质量。</p>
       <div id="healthBadges"></div>
     </section>
 
@@ -167,6 +167,7 @@
           <select id="mode">
             <option value="scene">Scene 场景图</option>
             <option value="tryon">Try-On 模特上身</option>
+            <option value="edit">Edit 多角度 / 在线编辑</option>
           </select>
         </div>
 
@@ -229,6 +230,61 @@
           </div>
         </div>
 
+        <div id="editFields" class="hidden">
+          <div class="row">
+            <label for="editPreset">编辑预设</label>
+            <select id="editPreset"></select>
+          </div>
+          <div class="row">
+            <label for="editPrompt">补充提示词</label>
+            <textarea id="editPrompt" placeholder="例如：same product on a clean premium white set, polished rim light"></textarea>
+          </div>
+          <div class="row">
+            <label for="editNegativePrompt">反向提示词</label>
+            <textarea id="editNegativePrompt"></textarea>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="editSteps">步数</label>
+              <input id="editSteps" type="number" value="8">
+            </div>
+            <div class="row">
+              <label for="editCfg">True CFG</label>
+              <input id="editCfg" type="number" step="0.1" value="1.0">
+            </div>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="editSeed">Seed</label>
+              <input id="editSeed" type="number" value="123">
+            </div>
+            <div class="row">
+              <label for="editUseAngleLora">多角度 LoRA</label>
+              <select id="editUseAngleLora">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="editUseLightning">Lightning</label>
+              <select id="editUseLightning">
+                <option value="true">开启</option>
+                <option value="false">关闭</option>
+              </select>
+            </div>
+            <div class="row">
+              <label for="editWidth">输出尺寸（宽，可选）</label>
+              <input id="editWidth" type="number" placeholder="默认按原图比例自动计算">
+            </div>
+          </div>
+          <div class="row">
+            <label for="editHeight">输出尺寸（高，可选）</label>
+            <input id="editHeight" type="number" placeholder="默认按原图比例自动计算">
+          </div>
+        </div>
+
         <button id="submit">生成</button>
         <div id="status" class="status">等待请求。</div>
       </section>
@@ -246,6 +302,7 @@
     const state = {
       scenePresets: [],
       tryonTemplates: [],
+      editPresets: [],
     };
 
     const els = {
@@ -261,12 +318,23 @@
       steps: document.getElementById("steps"),
       guidance: document.getElementById("guidance"),
       seed: document.getElementById("seed"),
+      editPreset: document.getElementById("editPreset"),
+      editPrompt: document.getElementById("editPrompt"),
+      editNegativePrompt: document.getElementById("editNegativePrompt"),
+      editSteps: document.getElementById("editSteps"),
+      editCfg: document.getElementById("editCfg"),
+      editSeed: document.getElementById("editSeed"),
+      editUseAngleLora: document.getElementById("editUseAngleLora"),
+      editUseLightning: document.getElementById("editUseLightning"),
+      editWidth: document.getElementById("editWidth"),
+      editHeight: document.getElementById("editHeight"),
       submit: document.getElementById("submit"),
       status: document.getElementById("status"),
       result: document.getElementById("result"),
       meta: document.getElementById("meta"),
       sceneFields: document.getElementById("sceneFields"),
       tryonFields: document.getElementById("tryonFields"),
+      editFields: document.getElementById("editFields"),
       healthBadges: document.getElementById("healthBadges"),
     };
 
@@ -279,16 +347,21 @@
         `ComfyUI: ${health.comfyui_reachable ? "在线" : "离线"}`,
         `Try-On: ${health.tryon_script_exists && health.tryon_root_exists ? "已接入" : "未就绪"}`,
         `模板数: ${health.tryon_template_count ?? 0}`,
+        `Edit 预设: ${health.edit_preset_count ?? 0}`,
         `Workflow 节点: ${health.workflow_nodes ?? 0}`,
       ];
       els.healthBadges.innerHTML = badges.map((item) => `<span class="badge">${item}</span>`).join("");
     }
 
     function updateModeUI() {
-      const isScene = els.mode.value === "scene";
+      const mode = els.mode.value;
+      const isScene = mode === "scene";
+      const isTryon = mode === "tryon";
+      const isEdit = mode === "edit";
       els.sceneFields.classList.toggle("hidden", !isScene);
-      els.tryonFields.classList.toggle("hidden", isScene);
-      els.submit.textContent = isScene ? "生成场景图" : "生成模特上身图";
+      els.tryonFields.classList.toggle("hidden", !isTryon);
+      els.editFields.classList.toggle("hidden", !isEdit);
+      els.submit.textContent = isScene ? "生成场景图" : isTryon ? "生成模特上身图" : "生成多角度/编辑图";
     }
 
     function applyScenePreset() {
@@ -299,22 +372,35 @@
       els.negativePrompt.value = preset.negative_prompt || "";
     }
 
+    function applyEditPreset() {
+      const preset = state.editPresets.find((item) => item.name === els.editPreset.value);
+      if (!preset) return;
+      els.editNegativePrompt.value = preset.negative_prompt || "";
+      els.editUseAngleLora.value = preset.use_angle_lora ? "true" : "false";
+      if (!els.editPrompt.value.trim()) {
+        els.editPrompt.value = "";
+      }
+    }
+
     async function fetchHealth() {
       const response = await fetch("/api/health");
       const data = await response.json();
       renderBadges(data);
       const comfy = data.comfyui_reachable ? "ComfyUI 在线" : "ComfyUI 未连通";
       const tryon = data.tryon_script_exists && data.tryon_root_exists ? "Try-On 已接入" : "Try-On 未就绪";
-      setStatus(`${comfy}，${tryon}`);
+      const edit = `Edit 预设 ${data.edit_preset_count ?? 0} 个`;
+      setStatus(`${comfy}，${tryon}，${edit}`);
     }
 
     async function fetchPresets() {
-      const [sceneResp, tryonResp] = await Promise.all([
+      const [sceneResp, tryonResp, editResp] = await Promise.all([
         fetch("/api/presets/scenes"),
         fetch("/api/presets/tryon-templates"),
+        fetch("/api/presets/edit-presets"),
       ]);
       state.scenePresets = await sceneResp.json();
       state.tryonTemplates = await tryonResp.json();
+      state.editPresets = await editResp.json();
 
       els.scenePreset.innerHTML = state.scenePresets
         .map((item) => `<option value="${item.name}">${item.title}</option>`)
@@ -322,7 +408,11 @@
       els.personTemplate.innerHTML = state.tryonTemplates
         .map((item) => `<option value="${item.name}">${item.name}</option>`)
         .join("");
+      els.editPreset.innerHTML = state.editPresets
+        .map((item) => `<option value="${item.name}">${item.title}</option>`)
+        .join("");
       applyScenePreset();
+      applyEditPreset();
     }
 
     function formatMeta(data) {
@@ -403,9 +493,34 @@
       return await readApiPayload(response);
     }
 
+    async function submitEdit() {
+      const image = els.image.files[0];
+      if (!image) throw new Error("请选择商品图。");
+
+      const formData = new FormData();
+      formData.append("image", image);
+      formData.append("prompt", els.editPrompt.value.trim());
+      formData.append("negative_prompt", els.editNegativePrompt.value.trim());
+      formData.append("angle_preset", els.editPreset.value);
+      formData.append("use_angle_lora", els.editUseAngleLora.value);
+      formData.append("use_lightning", els.editUseLightning.value);
+      formData.append("steps", els.editSteps.value.trim() || "8");
+      formData.append("true_cfg_scale", els.editCfg.value.trim() || "1.0");
+      formData.append("seed", els.editSeed.value.trim() || "123");
+      if (els.editWidth.value.trim()) formData.append("width", els.editWidth.value.trim());
+      if (els.editHeight.value.trim()) formData.append("height", els.editHeight.value.trim());
+
+      const response = await fetch("/generate/edit", {
+        method: "POST",
+        body: formData,
+      });
+      return await readApiPayload(response);
+    }
+
     els.mode.addEventListener("change", updateModeUI);
     els.scenePreset.addEventListener("change", applyScenePreset);
     els.productBrief.addEventListener("change", applyScenePreset);
+    els.editPreset.addEventListener("change", applyEditPreset);
 
     els.submit.addEventListener("click", async () => {
       els.submit.disabled = true;
@@ -413,13 +528,17 @@
       els.meta.textContent = "生成中。";
 
       try {
-        const data = els.mode.value === "scene" ? await submitScene() : await submitTryon();
+        const data = els.mode.value === "scene"
+          ? await submitScene()
+          : els.mode.value === "tryon"
+            ? await submitTryon()
+            : await submitEdit();
         els.result.src = `data:${data.mime_type};base64,${data.image_base64}`;
         setStatus(`完成。pipeline=${data.pipeline}，mode=${data.generator_mode}`);
         els.meta.textContent = formatMeta(data);
       } catch (error) {
         setStatus(`失败: ${error.message}`);
-        els.meta.textContent = "请检查 API、ComfyUI、CatVTON 依赖和模型下载状态。";
+        els.meta.textContent = "请检查 API、ComfyUI、CatVTON、Qwen Edit 依赖和模型下载状态。";
       } finally {
         els.submit.disabled = false;
       }

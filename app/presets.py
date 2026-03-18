@@ -73,3 +73,83 @@ SCENE_PRESETS = [
     },
 ]
 
+
+EDIT_PRESETS = [
+    {
+        "name": "camera_left_45",
+        "title": "左转 45 度",
+        "prompt_template": (
+            "Move the camera to the left and rotate 45 degrees to the left. "
+            "Keep the exact same product identity, fabric, trim, logo, and proportions. "
+            "Photorealistic premium ecommerce product photography."
+        ),
+        "negative_prompt": (
+            "different product, changed silhouette, changed length, changed neckline, changed sleeve, "
+            "extra accessories, duplicate object, broken geometry, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": True,
+    },
+    {
+        "name": "camera_right_45",
+        "title": "右转 45 度",
+        "prompt_template": (
+            "Move the camera to the right and rotate 45 degrees to the right. "
+            "Keep the exact same product identity, fabric, trim, logo, and proportions. "
+            "Photorealistic premium ecommerce product photography."
+        ),
+        "negative_prompt": (
+            "different product, changed silhouette, changed length, changed neckline, changed sleeve, "
+            "extra accessories, duplicate object, broken geometry, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": True,
+    },
+    {
+        "name": "top_down",
+        "title": "俯视镜头",
+        "prompt_template": (
+            "Turn the camera to a top-down view. Keep the exact same product identity, shape, fabric sheen, "
+            "and material details. Premium ecommerce product editing."
+        ),
+        "negative_prompt": (
+            "different product, changed silhouette, changed color, broken geometry, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": True,
+    },
+    {
+        "name": "close_up_detail",
+        "title": "特写细节",
+        "prompt_template": (
+            "Turn the camera to a close-up shot focusing on the garment texture and sewing details. "
+            "Keep the exact same product identity and material behavior. Premium ecommerce detail shot."
+        ),
+        "negative_prompt": (
+            "different product, changed texture, fake embroidery, extra accessories, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": True,
+    },
+    {
+        "name": "wide_angle_context",
+        "title": "广角氛围",
+        "prompt_template": (
+            "Turn the camera to a wide-angle lens while keeping the product as the hero subject. "
+            "Retain the same product identity, silhouette, and fabric characteristics. "
+            "Luxury editorial ecommerce image."
+        ),
+        "negative_prompt": (
+            "different product, tiny subject, changed silhouette, deformed shape, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": True,
+    },
+    {
+        "name": "editorial_light_shift",
+        "title": "仅改光线",
+        "prompt_template": (
+            "Keep the same camera angle and the exact same product identity. "
+            "Only restyle the lighting into polished luxury editorial light with realistic highlights and shadows."
+        ),
+        "negative_prompt": (
+            "different product, changed pose, changed silhouette, changed trim, duplicate object, blurry, low quality, watermark, text"
+        ),
+        "use_angle_lora": False,
+    },
+]

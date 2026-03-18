@@ -21,6 +21,21 @@ class Settings(BaseSettings):
     python_bin: Path = ROOT_DIR / ".venv" / "bin" / "python"
     catvton_script: Path = ROOT_DIR / "scripts" / "run_catvton_tryon.py"
     catvton_root: Path = ROOT_DIR.parent / "CatVTON"
+    qwen_edit_model_id: str = "Qwen/Qwen-Image-Edit-2509"
+    qwen_edit_lightning_repo: str = "lightx2v/Qwen-Image-Lightning"
+    qwen_edit_lightning_filename: str = "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors"
+    qwen_edit_angle_lora_repo: str = "dx8152/Qwen-Edit-2509-Multiple-angles"
+    qwen_edit_angle_lora_filename: str = "镜头转换.safetensors"
+    qwen_edit_cache_dir: Path = ROOT_DIR / "data" / "hf-cache"
+    qwen_edit_timeout_seconds: int = 3600
+    qwen_edit_default_steps: int = 8
+    qwen_edit_default_true_cfg_scale: float = 1.0
+    qwen_edit_default_width: int = 1024
+    qwen_edit_default_height: int = 1024
+    qwen_edit_default_max_side: int = 1024
+    qwen_edit_cpu_offload: bool = True
+    qwen_edit_enable_lightning: bool = True
+    qwen_edit_enable_angle_lora: bool = True
 
     upload_dir: Path = ROOT_DIR / "data" / "input"
     output_dir: Path = ROOT_DIR / "data" / "output"
@@ -43,6 +58,7 @@ class Settings(BaseSettings):
         "python_bin",
         "catvton_script",
         "catvton_root",
+        "qwen_edit_cache_dir",
         "upload_dir",
         "output_dir",
         mode="before",
@@ -55,6 +71,7 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     settings = Settings()
+    settings.qwen_edit_cache_dir.mkdir(parents=True, exist_ok=True)
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
     settings.output_dir.mkdir(parents=True, exist_ok=True)
     return settings

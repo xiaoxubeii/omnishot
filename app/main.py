@@ -16,8 +16,10 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 from app.cloth_preprocessor import preprocess_cloth_image
 from app.comfy_client import ComfyClient
 from app.config import ROOT_DIR, get_settings
-from app.presets import SCENE_PRESETS
+from app.edit_runner import run_qwen_edit
+from app.presets import EDIT_PRESETS, SCENE_PRESETS
 from app.schemas import (
+    EditJsonRequest,
     GenerateJsonRequest,
     GenerateResponse,
     HealthResponse,
@@ -81,6 +83,7 @@ async def health() -> HealthResponse:
         tryon_script_exists=settings.catvton_script.exists(),
         tryon_root_exists=settings.catvton_root.exists(),
         tryon_template_count=len(list_tryon_templates()),
+        edit_preset_count=len(EDIT_PRESETS),
         comfyui_details=comfyui_details,
     )
 
@@ -88,6 +91,11 @@ async def health() -> HealthResponse:
 @app.get("/api/presets/scenes")
 async def get_scene_presets() -> list[dict]:
     return SCENE_PRESETS
+
+
+@app.get("/api/presets/edit-presets")
+async def get_edit_presets() -> list[dict]:
+    return EDIT_PRESETS
 
 
 @app.get("/api/presets/tryon-templates")
@@ -211,6 +219,71 @@ async def generate_tryon(request: Request) -> GenerateResponse:
     )
 
 
+@app.post("/generate/edit", response_model=GenerateResponse)
+async def generate_edit(request: Request) -> GenerateResponse:
+    content_type = request.headers.get("content-type", "")
+    if content_type.startswith("application/json"):
+        incoming = await _parse_edit_json_request(request)
+    elif content_type.startswith("multipart/form-data"):
+        incoming = await _parse_edit_multipart_request(request)
+    else:
+        raise HTTPException(status_code=415, detail="Use multipart/form-data or application/json")
+
+    input_path = _persist_input(incoming["image_bytes"], incoming["filename"])
+    source_image = Image.open(io.BytesIO(incoming["image_bytes"]))
+
+    try:
+        async with app.state.gpu_lock:
+            result = await run_qwen_edit(
+                settings,
+                image=source_image,
+                prompt=incoming["prompt"],
+                negative_prompt=incoming["negative_prompt"],
+                seed=incoming["seed"],
+                width=incoming["width"],
+                height=incoming["height"],
+                steps=incoming["steps"],
+                true_cfg_scale=incoming["true_cfg_scale"],
+                use_lightning=incoming["use_lightning"],
+                lightning_lora_scale=incoming["lightning_lora_scale"],
+                use_angle_lora=incoming["use_angle_lora"],
+                angle_lora_scale=incoming["angle_lora_scale"],
+            )
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Qwen edit generation failed: {exc}") from exc
+
+    prompt_id = str(uuid.uuid4())
+    output_name = f"qwen-edit-{prompt_id}.png"
+    settings.output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = settings.output_dir / output_name
+    output_path.write_bytes(result.image_bytes)
+
+    return GenerateResponse(
+        prompt_id=prompt_id,
+        pipeline="edit",
+        generator_mode="qwen-image-edit",
+        filename=output_name,
+        output_url=f"/outputs/{output_name}",
+        mime_type="image/png",
+        image_base64=base64.b64encode(result.image_bytes).decode("utf-8"),
+        comfyui_prompt_id=None,
+        local_input_path=str(input_path),
+        metadata={
+            "seed": result.seed,
+            "width": result.width,
+            "height": result.height,
+            "steps": result.steps,
+            "true_cfg_scale": result.true_cfg_scale,
+            "angle_preset": incoming["angle_preset"],
+            "active_adapters": result.active_adapters,
+            "adapter_weights": result.adapter_weights,
+            "use_lightning": incoming["use_lightning"],
+            "use_angle_lora": incoming["use_angle_lora"],
+            "negative_prompt": incoming["negative_prompt"],
+        },
+    )
+
+
 async def _parse_json_request(request: Request) -> dict:
     payload = GenerateJsonRequest.model_validate(await request.json())
     image_bytes = _decode_base64_image(payload.image_base64, "image_base64")
@@ -245,6 +318,30 @@ async def _parse_tryon_json_request(request: Request) -> dict:
     }
 
 
+async def _parse_edit_json_request(request: Request) -> dict:
+    payload = EditJsonRequest.model_validate(await request.json())
+    prompt, use_angle_lora = _resolve_edit_prompt(payload.prompt, payload.angle_preset, payload.use_angle_lora)
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Missing prompt or angle_preset")
+
+    return {
+        "image_bytes": _decode_base64_image(payload.image_base64, "image_base64"),
+        "filename": _safe_filename(payload.filename or "edit.png"),
+        "prompt": prompt,
+        "negative_prompt": payload.negative_prompt.strip(),
+        "seed": payload.seed,
+        "width": payload.width,
+        "height": payload.height,
+        "steps": payload.steps,
+        "true_cfg_scale": payload.true_cfg_scale,
+        "angle_preset": payload.angle_preset,
+        "use_angle_lora": use_angle_lora,
+        "angle_lora_scale": payload.angle_lora_scale,
+        "use_lightning": payload.use_lightning,
+        "lightning_lora_scale": payload.lightning_lora_scale,
+    }
+
+
 async def _parse_multipart_request(request: Request) -> dict:
     form = await request.form()
     upload = form.get("image")
@@ -267,6 +364,55 @@ async def _parse_multipart_request(request: Request) -> dict:
         "prompt": prompt,
         "negative_prompt": negative_prompt,
         "seed": seed,
+    }
+
+
+async def _parse_edit_multipart_request(request: Request) -> dict:
+    form = await request.form()
+    upload = form.get("image")
+    prompt_text = str(form.get("prompt", "")).strip()
+    negative_prompt = str(form.get("negative_prompt", "")).strip()
+    angle_preset = str(form.get("angle_preset", "")).strip() or None
+    use_angle_lora_text = str(form.get("use_angle_lora", "true")).strip()
+    use_lightning_text = str(form.get("use_lightning", "true")).strip()
+    seed = int(str(form.get("seed", "123")).strip() or "123")
+    width_text = str(form.get("width", "")).strip()
+    height_text = str(form.get("height", "")).strip()
+    steps = int(str(form.get("steps", str(settings.qwen_edit_default_steps))).strip() or str(settings.qwen_edit_default_steps))
+    true_cfg_scale = float(
+        str(form.get("true_cfg_scale", str(settings.qwen_edit_default_true_cfg_scale))).strip()
+        or str(settings.qwen_edit_default_true_cfg_scale)
+    )
+    angle_lora_scale = float(str(form.get("angle_lora_scale", "1.0")).strip() or "1.0")
+    lightning_lora_scale = float(str(form.get("lightning_lora_scale", "1.0")).strip() or "1.0")
+
+    if upload is None or not hasattr(upload, "read"):
+        raise HTTPException(status_code=400, detail="Missing file field: image")
+
+    prompt, use_angle_lora = _resolve_edit_prompt(
+        prompt_text,
+        angle_preset,
+        _parse_bool_form(use_angle_lora_text, default=True),
+    )
+    if not prompt:
+        raise HTTPException(status_code=400, detail="Missing prompt or angle_preset")
+
+    image_bytes = await upload.read()
+    return {
+        "image_bytes": image_bytes,
+        "filename": _safe_filename(upload.filename or "edit.png"),
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "seed": seed,
+        "width": int(width_text) if width_text else None,
+        "height": int(height_text) if height_text else None,
+        "steps": steps,
+        "true_cfg_scale": true_cfg_scale,
+        "angle_preset": angle_preset,
+        "use_angle_lora": use_angle_lora,
+        "angle_lora_scale": angle_lora_scale,
+        "use_lightning": _parse_bool_form(use_lightning_text, default=True),
+        "lightning_lora_scale": lightning_lora_scale,
     }
 
 
@@ -388,6 +534,22 @@ def _persist_input(image_bytes: bytes, filename: str) -> Path:
     return path
 
 
+def _resolve_edit_prompt(prompt: str, angle_preset: str | None, requested_use_angle_lora: bool) -> tuple[str, bool]:
+    prompt = prompt.strip()
+    preset_prompt = ""
+    preset_uses_angle_lora = False
+
+    if angle_preset:
+        preset = next((item for item in EDIT_PRESETS if item["name"] == angle_preset), None)
+        if preset is None:
+            raise HTTPException(status_code=400, detail=f"Unknown edit preset: {angle_preset}")
+        preset_prompt = str(preset["prompt_template"]).strip()
+        preset_uses_angle_lora = bool(preset.get("use_angle_lora", False))
+
+    full_prompt = "\n".join(part for part in [preset_prompt, prompt] if part).strip()
+    return full_prompt, requested_use_angle_lora or preset_uses_angle_lora
+
+
 def _safe_filename(filename: str) -> str:
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", filename).strip("._")
     return cleaned or "upload.png"
@@ -398,6 +560,17 @@ def _decode_base64_image(raw_value: str, field_name: str) -> bytes:
         return base64.b64decode(raw_value, validate=True)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid {field_name} payload") from exc
+
+
+def _parse_bool_form(raw_value: str, *, default: bool) -> bool:
+    value = raw_value.strip().lower()
+    if not value:
+        return default
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise HTTPException(status_code=400, detail=f"Invalid boolean value: {raw_value}")
 
 
 def _render_mock_result(image_bytes: bytes, prompt: str, seed: int | None) -> bytes:

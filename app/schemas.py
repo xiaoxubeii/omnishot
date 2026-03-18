@@ -25,6 +25,23 @@ class TryOnJsonRequest(BaseModel):
     height: int = 1024
 
 
+class EditJsonRequest(BaseModel):
+    image_base64: str = Field(min_length=1)
+    prompt: str = ""
+    negative_prompt: str = ""
+    filename: str | None = None
+    seed: int = 123
+    width: int | None = None
+    height: int | None = None
+    steps: int = 8
+    true_cfg_scale: float = 1.0
+    angle_preset: str | None = None
+    use_angle_lora: bool = True
+    angle_lora_scale: float = 1.0
+    use_lightning: bool = True
+    lightning_lora_scale: float = 1.0
+
+
 class GenerateResponse(BaseModel):
     prompt_id: str
     pipeline: str = "scene"
@@ -49,4 +66,5 @@ class HealthResponse(BaseModel):
     tryon_script_exists: bool = False
     tryon_root_exists: bool = False
     tryon_template_count: int = 0
+    edit_preset_count: int = 0
     comfyui_details: dict = Field(default_factory=dict)
