@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import io
+import logging
 import math
 import os
 import threading
@@ -30,6 +31,8 @@ LIGHTNING_SCHEDULER_CONFIG = {
     "use_exponential_sigmas": False,
     "use_karras_sigmas": False,
 }
+
+LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -65,6 +68,7 @@ class QwenEditService:
             self.settings.qwen_edit_model_id,
             torch_dtype=torch.bfloat16,
             cache_dir=str(self.settings.qwen_edit_cache_dir),
+            local_files_only=True,
         )
         pipeline.set_progress_bar_config(disable=True)
         if hasattr(pipeline, "vae") and pipeline.vae is not None:
@@ -77,6 +81,7 @@ class QwenEditService:
                 weight_name=self.settings.qwen_edit_lightning_filename,
                 adapter_name="lightning",
                 cache_dir=str(self.settings.qwen_edit_cache_dir),
+                local_files_only=True,
             )
             pipeline.scheduler = FlowMatchEulerDiscreteScheduler.from_config(LIGHTNING_SCHEDULER_CONFIG)
             self._loaded_adapters.add("lightning")
@@ -87,11 +92,12 @@ class QwenEditService:
                 weight_name=self.settings.qwen_edit_angle_lora_filename,
                 adapter_name="multiple_angles",
                 cache_dir=str(self.settings.qwen_edit_cache_dir),
+                local_files_only=True,
             )
             self._loaded_adapters.add("multiple_angles")
 
         if self.settings.qwen_edit_cpu_offload:
-            pipeline.enable_model_cpu_offload()
+            pipeline.enable_sequential_cpu_offload()
         else:
             pipeline.to("cuda")
 
@@ -124,6 +130,53 @@ class QwenEditService:
         target_w = width or int(src_w * scale)
         target_h = height or int(src_h * scale)
         return self._round_dim(target_w), self._round_dim(target_h)
+
+    def _candidate_sizes(
+        self,
+        image: Image.Image,
+        width: int | None,
+        height: int | None,
+    ) -> list[tuple[int, int]]:
+        resolved = self._resolve_size(image, width, height)
+        if width and height:
+            return [resolved]
+
+        src_w, src_h = image.size
+        initial_max_side = max(resolved)
+        max_side_candidates = [initial_max_side, 896, 768, 640, 512]
+        sizes: list[tuple[int, int]] = []
+        seen: set[tuple[int, int]] = set()
+
+        for max_side in max_side_candidates:
+            if max_side > initial_max_side:
+                continue
+            if src_w >= src_h:
+                target_w = max_side
+                target_h = int(src_h * (max_side / max(src_w, 1)))
+            else:
+                target_h = max_side
+                target_w = int(src_w * (max_side / max(src_h, 1)))
+            candidate = (self._round_dim(target_w), self._round_dim(target_h))
+            if candidate in seen:
+                continue
+            seen.add(candidate)
+            sizes.append(candidate)
+
+        return sizes
+
+    @staticmethod
+    def _is_cuda_oom(exc: RuntimeError) -> bool:
+        message = str(exc).lower()
+        return "cuda out of memory" in message or "cublas" in message and "alloc" in message
+
+    @staticmethod
+    def _cleanup_after_oom(pipeline: QwenImageEditPlusPipeline) -> None:
+        maybe_free = getattr(pipeline, "maybe_free_model_hooks", None)
+        if callable(maybe_free):
+            maybe_free()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
     def _apply_adapters(
         self,
@@ -173,7 +226,7 @@ class QwenEditService:
     ) -> QwenEditRunResult:
         pipeline = self._ensure_pipeline()
         source = ImageOps.exif_transpose(image).convert("RGB")
-        final_width, final_height = self._resolve_size(source, width, height)
+        candidate_sizes = self._candidate_sizes(source, width, height)
 
         with self._run_lock:
             active_adapters, adapter_weights = self._apply_adapters(
@@ -183,19 +236,42 @@ class QwenEditService:
                 use_angle_lora=use_angle_lora,
                 angle_lora_scale=angle_lora_scale,
             )
-            generator = torch.Generator(device="cpu").manual_seed(seed)
-            with torch.inference_mode():
-                output = pipeline(
-                    image=source,
-                    prompt=prompt,
-                    negative_prompt=negative_prompt or None,
-                    true_cfg_scale=true_cfg_scale,
-                    width=final_width,
-                    height=final_height,
-                    num_inference_steps=steps,
-                    generator=generator,
-                )
-            result_image = output.images[0].convert("RGB")
+            last_error: RuntimeError | None = None
+            result_image: Image.Image | None = None
+            final_width = 0
+            final_height = 0
+
+            for final_width, final_height in candidate_sizes:
+                generator = torch.Generator(device="cpu").manual_seed(seed)
+                try:
+                    # PEFT adapter switching inside the Qwen edit pipeline may touch
+                    # requires_grad flags, which is incompatible with inference_mode.
+                    with torch.no_grad():
+                        output = pipeline(
+                            image=source,
+                            prompt=prompt,
+                            negative_prompt=negative_prompt or None,
+                            true_cfg_scale=true_cfg_scale,
+                            width=final_width,
+                            height=final_height,
+                            num_inference_steps=steps,
+                            generator=generator,
+                        )
+                    result_image = output.images[0].convert("RGB")
+                    break
+                except RuntimeError as exc:
+                    if not self._is_cuda_oom(exc) or final_width == candidate_sizes[-1][0] and final_height == candidate_sizes[-1][1]:
+                        raise
+                    last_error = exc
+                    LOGGER.warning(
+                        "Qwen edit OOM at %sx%s, retrying at lower size",
+                        final_width,
+                        final_height,
+                    )
+                    self._cleanup_after_oom(pipeline)
+
+            if result_image is None:
+                raise last_error or RuntimeError("Qwen edit generation failed without producing an image.")
 
         buffer = io.BytesIO()
         result_image.save(buffer, format="PNG")

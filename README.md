@@ -310,6 +310,13 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --angle-preset camera_left_45
 ```
 
+已验证：
+
+- `2026-03-18` 在 `RTX 4090 24G` 上完成真实 `smoke_edit.py`
+- 输出落在 `data/output/smoke-edit-latest.png`
+- 运行时强制走本地缓存，不再依赖在线拉模
+- 默认会在 `Qwen Edit` 显存不足时自动降分辨率重试，避免直接 `502`
+
 9. 一键看当前状态（服务健康 + FLUX 就绪度）：
 
 ```bash
@@ -413,9 +420,9 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --output-dir data/batch-output
 ```
 
-## 一次性生成场景图 + 模特图
+## 一次性生成场景图 + 模特图 + 多角度图
 
-如果你要直接从一个目录里同时批量出 `scene` 和 `try-on` 两类结果，用这个新脚本：
+如果你要直接从一个目录里同时批量出 `scene`、`try-on`、`edit`、`tryon_angle` 四类结果，用这个脚本：
 
 [`scripts/catalog_generate.py`](/home/cheng/workspace/ai-phantom-studio-demo/scripts/catalog_generate.py)
 
@@ -429,14 +436,28 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --output-dir data/catalog-output \
   --product-brief "premium silk slip dress product photo" \
   --scene-count 4 \
-  --tryon-templates woman_1,woman_2,woman_3
+  --tryon-templates woman_1,woman_2,woman_3 \
+  --edit-presets camera_left_45,camera_right_45 \
+  --tryon-angle-presets camera_left_45
 ```
 
 输出会分成：
 
 - `data/catalog-output/scenes/`
+- `data/catalog-output/edit/`
 - `data/catalog-output/tryon/`
+- `data/catalog-output/tryon-angle/`
 - `data/catalog-output/manifest.jsonl`
+
+说明：
+
+- `--edit-presets`
+  - 作用在原始商品图上，生成多角度或在线编辑图
+- `--tryon-angle-presets`
+  - 先跑 `try-on`，再对模特上身结果做二次角度编辑
+- `tryon_angle` 的 prompt 会自动附加“保持同一模特和同一服装”的约束
+
+如果你只想保留旧行为，也可以不传 `--edit-presets` 和 `--tryon-angle-presets`，脚本会只生成 `scene + try-on`。
 
 ### 自定义场景提示词
 

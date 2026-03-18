@@ -11,10 +11,21 @@ from urllib import request
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+DEFAULT_SCENE_COUNT = 4
+DEFAULT_TRYON_TEMPLATES = "woman_1,woman_2,woman_3"
+DEFAULT_EDIT_PRESETS = ""
+DEFAULT_TRYON_ANGLE_PRESETS = ""
+TRYON_ANGLE_SUFFIX = (
+    "Keep the exact same model identity, face, hairstyle, body proportions, garment fit, pattern, "
+    "trim, color, and silhouette. Only change the camera viewpoint, framing, and lighting in a "
+    "photorealistic premium ecommerce fashion photo."
+)
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate scene and try-on images from a folder of product images.")
+    parser = argparse.ArgumentParser(
+        description="Generate scene, try-on, edit, and tryon-angle images from a folder of product images."
+    )
     parser.add_argument("--api-base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--input-dir", type=Path, default=ROOT_DIR / "data" / "incoming-products")
     parser.add_argument("--output-dir", type=Path, default=ROOT_DIR / "data" / "catalog-output")
@@ -23,13 +34,29 @@ def parse_args() -> argparse.Namespace:
         default="premium ecommerce apparel product",
         help="Injected into scene preset prompt templates.",
     )
-    parser.add_argument("--scene-count", type=int, default=4, help="How many built-in scene presets to use.")
-    parser.add_argument(
-        "--tryon-templates",
-        default="woman_1,woman_2,woman_3",
-        help="Comma-separated built-in person templates for try-on.",
-    )
+    parser.add_argument("--scene-count", type=int, default=DEFAULT_SCENE_COUNT)
+    parser.add_argument("--tryon-templates", default=DEFAULT_TRYON_TEMPLATES)
     parser.add_argument("--cloth-type", default="overall", choices=["upper", "lower", "overall"])
+    parser.add_argument(
+        "--edit-presets",
+        default=DEFAULT_EDIT_PRESETS,
+        help="Comma-separated built-in edit preset names. Empty means disabled.",
+    )
+    parser.add_argument(
+        "--edit-extra-prompt",
+        default="",
+        help="Extra prompt appended to product edit requests.",
+    )
+    parser.add_argument(
+        "--tryon-angle-presets",
+        default=DEFAULT_TRYON_ANGLE_PRESETS,
+        help="Comma-separated built-in edit preset names applied to try-on outputs. Empty means disabled.",
+    )
+    parser.add_argument(
+        "--tryon-angle-extra-prompt",
+        default="",
+        help="Extra prompt appended to model-wearing angle edit requests.",
+    )
     parser.add_argument("--once", action="store_true", help="Run one scan then exit.")
     parser.add_argument("--poll-seconds", type=float, default=10.0)
     parser.add_argument("--timeout", type=float, default=3600.0)
@@ -67,10 +94,11 @@ def build_job_key(image_path: Path, category: str, variant: str) -> str:
     return sha1(raw.encode("utf-8")).hexdigest()
 
 
-def load_processed_keys(manifest_path: Path) -> set[str]:
+def load_success_records(manifest_path: Path) -> tuple[set[str], dict[str, dict]]:
     processed = set()
+    records: dict[str, dict] = {}
     if not manifest_path.exists():
-        return processed
+        return processed, records
     with manifest_path.open("r", encoding="utf-8") as handle:
         for line in handle:
             line = line.strip()
@@ -80,9 +108,11 @@ def load_processed_keys(manifest_path: Path) -> set[str]:
                 record = json.loads(line)
             except Exception:
                 continue
-            if record.get("status") == "ok" and record.get("job_key"):
-                processed.add(record["job_key"])
-    return processed
+            job_key = str(record.get("job_key", "")).strip()
+            if record.get("status") == "ok" and job_key:
+                processed.add(job_key)
+                records[job_key] = record
+    return processed, records
 
 
 def encode_image(path: Path) -> str:
@@ -100,14 +130,64 @@ def render_scene_prompt(template: str, product_brief: str) -> str:
     return template.format(product_brief=product_brief).strip()
 
 
+def parse_names(raw_value: str) -> list[str]:
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
+
+def index_presets(items: list[dict]) -> dict[str, dict]:
+    return {item["name"]: item for item in items}
+
+
+def select_presets(all_presets: list[dict], names: list[str]) -> list[dict]:
+    if not names:
+        return []
+    indexed = index_presets(all_presets)
+    selected: list[dict] = []
+    missing: list[str] = []
+    for name in names:
+        preset = indexed.get(name)
+        if preset is None:
+            missing.append(name)
+            continue
+        selected.append(preset)
+    if missing:
+        raise ValueError(f"Unknown presets: {', '.join(missing)}")
+    return selected
+
+
+def render_product_edit_prompt(preset: dict, extra_prompt: str) -> str:
+    parts = [
+        str(preset.get("prompt_template", "")).strip(),
+        extra_prompt.strip(),
+    ]
+    return "\n".join(part for part in parts if part).strip()
+
+
+def render_tryon_angle_prompt(preset: dict, extra_prompt: str) -> str:
+    parts = [
+        str(preset.get("prompt_template", "")).strip(),
+        TRYON_ANGLE_SUFFIX,
+        extra_prompt.strip(),
+    ]
+    return "\n".join(part for part in parts if part).strip()
+
+
+def write_manifest(path: Path, record: dict) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
 def process_once(args: argparse.Namespace) -> None:
     scenes = api_get_json(f"{args.api_base_url}/api/presets/scenes", timeout=args.timeout)[: args.scene_count]
-    tryon_templates = [item.strip() for item in args.tryon_templates.split(",") if item.strip()]
+    edit_presets_all = api_get_json(f"{args.api_base_url}/api/presets/edit-presets", timeout=args.timeout)
+    tryon_templates = parse_names(args.tryon_templates)
+    edit_presets = select_presets(edit_presets_all, parse_names(args.edit_presets))
+    tryon_angle_presets = select_presets(edit_presets_all, parse_names(args.tryon_angle_presets))
 
     images = discover_images(args.input_dir)
     manifest_path = args.output_dir / "manifest.jsonl"
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    processed_keys = load_processed_keys(manifest_path)
+    processed_keys, success_records = load_success_records(manifest_path)
 
     seed = args.seed_start
     for image_path in images:
@@ -135,73 +215,174 @@ def process_once(args: argparse.Namespace) -> None:
                 scene["name"],
                 response_payload,
             )
-            write_manifest(
-                manifest_path,
-                {
-                    "timestamp": datetime.now().isoformat(timespec="seconds"),
-                    "job_key": job_key,
-                    "status": "ok",
-                    "type": "scene",
-                    "source_image": str(image_path),
-                    "variant": scene["name"],
-                    "saved_path": str(saved_path),
-                    "generator_mode": response_payload.get("generator_mode"),
-                    "pipeline": response_payload.get("pipeline"),
-                },
-            )
+            record = {
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "job_key": job_key,
+                "status": "ok",
+                "type": "scene",
+                "source_image": str(image_path),
+                "variant": scene["name"],
+                "saved_path": str(saved_path),
+                "generator_mode": response_payload.get("generator_mode"),
+                "pipeline": response_payload.get("pipeline"),
+            }
+            write_manifest(manifest_path, record)
             processed_keys.add(job_key)
+            success_records[job_key] = record
             print(f"scene ok: {image_path.name} -> {scene['name']} -> {saved_path}")
             seed += 1
 
-        for template_name in tryon_templates:
-            job_key = build_job_key(image_path, "tryon", template_name)
+        for preset in edit_presets:
+            job_key = build_job_key(image_path, "edit", preset["name"])
             if job_key in processed_keys:
                 continue
             payload = {
                 "filename": image_path.name,
                 "image_base64": image_b64,
-                "person_template": template_name,
-                "cloth_type": args.cloth_type,
+                "angle_preset": preset["name"],
+                "prompt": render_product_edit_prompt(preset, args.edit_extra_prompt),
+                "negative_prompt": preset.get("negative_prompt", ""),
                 "seed": seed,
-                "steps": 30,
-                "guidance": 2.5,
-                "width": 768,
-                "height": 1024,
+                "steps": 8,
+                "true_cfg_scale": 1.0,
+                "use_angle_lora": bool(preset.get("use_angle_lora", True)),
+                "use_lightning": True,
             }
             response_payload = api_post_json(
-                f"{args.api_base_url}/generate/tryon",
+                f"{args.api_base_url}/generate/edit",
                 payload,
                 timeout=args.timeout,
             )
             saved_path = save_response_image(
-                args.output_dir / "tryon",
+                args.output_dir / "edit",
                 image_path.stem,
-                template_name,
+                preset["name"],
                 response_payload,
             )
-            write_manifest(
-                manifest_path,
-                {
+            record = {
+                "timestamp": datetime.now().isoformat(timespec="seconds"),
+                "job_key": job_key,
+                "status": "ok",
+                "type": "edit",
+                "source_image": str(image_path),
+                "variant": preset["name"],
+                "saved_path": str(saved_path),
+                "generator_mode": response_payload.get("generator_mode"),
+                "pipeline": response_payload.get("pipeline"),
+                "metadata": response_payload.get("metadata", {}),
+            }
+            write_manifest(manifest_path, record)
+            processed_keys.add(job_key)
+            success_records[job_key] = record
+            print(f"edit ok: {image_path.name} -> {preset['name']} -> {saved_path}")
+            seed += 1
+
+        for template_name in tryon_templates:
+            tryon_job_key = build_job_key(image_path, "tryon", template_name)
+            tryon_response_payload: dict | None = None
+            tryon_saved_path: Path | None = None
+
+            if tryon_job_key in processed_keys:
+                saved_path = success_records.get(tryon_job_key, {}).get("saved_path")
+                if saved_path:
+                    tryon_saved_path = Path(saved_path)
+            else:
+                payload = {
+                    "filename": image_path.name,
+                    "image_base64": image_b64,
+                    "person_template": template_name,
+                    "cloth_type": args.cloth_type,
+                    "seed": seed,
+                    "steps": 30,
+                    "guidance": 2.5,
+                    "width": 768,
+                    "height": 1024,
+                }
+                tryon_response_payload = api_post_json(
+                    f"{args.api_base_url}/generate/tryon",
+                    payload,
+                    timeout=args.timeout,
+                )
+                tryon_saved_path = save_response_image(
+                    args.output_dir / "tryon",
+                    image_path.stem,
+                    template_name,
+                    tryon_response_payload,
+                )
+                record = {
                     "timestamp": datetime.now().isoformat(timespec="seconds"),
-                    "job_key": job_key,
+                    "job_key": tryon_job_key,
                     "status": "ok",
                     "type": "tryon",
                     "source_image": str(image_path),
                     "variant": template_name,
+                    "saved_path": str(tryon_saved_path),
+                    "generator_mode": tryon_response_payload.get("generator_mode"),
+                    "pipeline": tryon_response_payload.get("pipeline"),
+                    "metadata": tryon_response_payload.get("metadata", {}),
+                }
+                write_manifest(manifest_path, record)
+                processed_keys.add(tryon_job_key)
+                success_records[tryon_job_key] = record
+                print(f"tryon ok: {image_path.name} -> {template_name} -> {tryon_saved_path}")
+                seed += 1
+
+            if not tryon_angle_presets:
+                continue
+
+            if tryon_response_payload is not None:
+                tryon_source_b64 = str(tryon_response_payload["image_base64"])
+            elif tryon_saved_path is not None and tryon_saved_path.exists():
+                tryon_source_b64 = encode_image(tryon_saved_path)
+            else:
+                print(f"tryon_angle skip: missing try-on source for {image_path.name} / {template_name}")
+                continue
+
+            for preset in tryon_angle_presets:
+                variant_name = f"{template_name}__{preset['name']}"
+                job_key = build_job_key(image_path, "tryon_angle", variant_name)
+                if job_key in processed_keys:
+                    continue
+                payload = {
+                    "filename": f"{image_path.stem}__{template_name}.png",
+                    "image_base64": tryon_source_b64,
+                    "angle_preset": preset["name"],
+                    "prompt": render_tryon_angle_prompt(preset, args.tryon_angle_extra_prompt),
+                    "negative_prompt": preset.get("negative_prompt", ""),
+                    "seed": seed,
+                    "steps": 8,
+                    "true_cfg_scale": 1.0,
+                    "use_angle_lora": bool(preset.get("use_angle_lora", True)),
+                    "use_lightning": True,
+                }
+                response_payload = api_post_json(
+                    f"{args.api_base_url}/generate/edit",
+                    payload,
+                    timeout=args.timeout,
+                )
+                saved_path = save_response_image(
+                    args.output_dir / "tryon-angle",
+                    image_path.stem,
+                    variant_name,
+                    response_payload,
+                )
+                record = {
+                    "timestamp": datetime.now().isoformat(timespec="seconds"),
+                    "job_key": job_key,
+                    "status": "ok",
+                    "type": "tryon_angle",
+                    "source_image": str(image_path),
+                    "variant": variant_name,
                     "saved_path": str(saved_path),
                     "generator_mode": response_payload.get("generator_mode"),
                     "pipeline": response_payload.get("pipeline"),
                     "metadata": response_payload.get("metadata", {}),
-                },
-            )
-            processed_keys.add(job_key)
-            print(f"tryon ok: {image_path.name} -> {template_name} -> {saved_path}")
-            seed += 1
-
-
-def write_manifest(path: Path, record: dict) -> None:
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+                }
+                write_manifest(manifest_path, record)
+                processed_keys.add(job_key)
+                success_records[job_key] = record
+                print(f"tryon_angle ok: {image_path.name} -> {variant_name} -> {saved_path}")
+                seed += 1
 
 
 def main() -> int:
