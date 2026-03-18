@@ -211,6 +211,20 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 ./scripts/start_comfyui.sh
 ```
 
+说明：
+
+- `scripts/start_comfyui.sh` 默认会设置：
+  - `HF_ENDPOINT=https://hf-mirror.com`
+  - `HF_HUB_OFFLINE=1`
+  - `TRANSFORMERS_OFFLINE=1`
+- 作用是让 `DepthAnything` 之类的预处理节点优先直接使用本地缓存，避免运行时因为 `huggingface.co` 的 `HEAD` 探测卡住首张图。
+- 如果你明确要让 ComfyUI 在线拉新模型，可以手动覆盖：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+HF_HUB_OFFLINE=0 TRANSFORMERS_OFFLINE=0 ./scripts/start_comfyui.sh
+```
+
 2. 启动 FastAPI：
 
 ```bash
@@ -319,9 +333,18 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 - 运行时强制走本地缓存，不再依赖在线拉模
 - 默认会在 `Qwen Edit` 显存不足时自动降分辨率重试，避免直接 `502`
 - `2026-03-18` 完成真实 `tryon -> tryon_angle` 组合测试
+- `2026-03-18` 完成真实缩小版全链路批处理测试：
+  - `scene -> generator_mode=comfyui`
+  - `edit -> generator_mode=qwen-image-edit`
+  - `tryon -> generator_mode=catvton`
+  - `tryon_angle -> generator_mode=qwen-image-edit`
 - 输出示例：
   - `data/output/real-tryon-woman_1.png`
   - `data/output/real-tryon-angle-woman_1-left45.png`
+  - `data/tmp-real-full-output-1773832288/scenes/WechatIMG339__hotel_suite_warmth.png`
+  - `data/tmp-real-full-output-1773832288/edit/WechatIMG339__camera_left_45.png`
+  - `data/tmp-real-full-output-1773832288/tryon/WechatIMG339__woman_1.png`
+  - `data/tmp-real-full-output-1773832288/tryon-angle/WechatIMG339__woman_1__camera_left_45.png`
 
 说明：
 
