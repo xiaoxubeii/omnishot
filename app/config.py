@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     app_name: str = "AI Phantom Studio Demo"
     host: str = "0.0.0.0"
     port: int = 8000
+    public_base_url: str | None = None
 
     comfyui_base_url: str = "http://127.0.0.1:8188"
     comfyui_ws_url: str = "ws://127.0.0.1:8188/ws"

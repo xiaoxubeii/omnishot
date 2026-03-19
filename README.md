@@ -32,6 +32,17 @@ git submodule update --init --recursive
 
 这个仓库现在包含一个 MCP server，用来把本地 Omnishot 能力暴露给支持 MCP 的客户端。
 
+截至 `2026-03-19`，它同时支持两种部署方式：
+
+1. 本地代理模式
+   - `MCP server` 跑在调用方机器
+   - 工具参数可直接传本地绝对路径
+   - `MCP server` 读取本地文件，再把图片上传到远端 `FastAPI`
+2. 纯远端模式
+   - `FastAPI + MCP server + ComfyUI + Qwen Edit + CatVTON` 都跑在远端 GPU 机器
+   - 调用方通过 HTTP 访问远端 MCP
+   - 工具参数优先使用 `image_url` / `cloth_image_url` / `image_base64`
+
 暴露的工具：
 
 - `health`
@@ -70,6 +81,40 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
   --streamable-http-path /mcp
 ```
 
+### 远端部署推荐启动方式
+
+先启动远端 API：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+HOST=0.0.0.0 \
+PORT=8000 \
+OMNISHOT_PUBLIC_BASE_URL=https://your-host.example.com \
+./scripts/start_api.sh
+```
+
+再启动远端 MCP HTTP：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+HOST=0.0.0.0 \
+MCP_PORT=8765 \
+MCP_PATH=/mcp \
+OMNISHOT_API_BASE_URL=http://127.0.0.1:8000 \
+./scripts/start_remote_mcp_http.sh
+```
+
+说明：
+
+- `OMNISHOT_PUBLIC_BASE_URL`
+  - 用于让 API 返回可公开访问的图片 URL
+- `OMNISHOT_API_BASE_URL`
+  - 用于让 MCP server 指向实际 FastAPI 地址
+- 如果 `Monoclaw/OpenClaw` 和 GPU 机器不在同一文件系统：
+  - 不要让工具只传本地路径
+  - 优先传 `image_url` / `cloth_image_url`
+  - 或传 `image_base64` 并带 `filename`
+
 ### 本地烟测
 
 先启动 FastAPI：
@@ -92,6 +137,9 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 - 要实际生成图片，仍然需要先启动本地：
   - `FastAPI`
   - `ComfyUI`
+- 如果走“本地代理 -> 远端 API”模式：
+  - 本地 MCP server 会把远端生成结果自动落到本地 `data/output/`
+  - 这样上层系统仍然可以继续使用本地 `MEDIA:/absolute/path.png` 合同
 
 ## 当前推荐流程
 

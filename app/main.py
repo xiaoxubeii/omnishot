@@ -42,6 +42,13 @@ app.add_middleware(
 app.mount("/outputs", StaticFiles(directory=str(settings.output_dir)), name="outputs")
 
 
+def _build_output_url(filename: str) -> str:
+    relative = f"/outputs/{filename}"
+    if settings.public_base_url and settings.public_base_url.strip():
+        return f"{settings.public_base_url.rstrip('/')}{relative}"
+    return relative
+
+
 @app.on_event("startup")
 async def startup_event() -> None:
     settings.upload_dir.mkdir(parents=True, exist_ok=True)
@@ -204,7 +211,7 @@ async def generate_tryon(request: Request) -> GenerateResponse:
         pipeline="tryon",
         generator_mode="catvton",
         filename=output_name,
-        output_url=f"/outputs/{output_name}",
+        output_url=_build_output_url(output_name),
         mime_type="image/png",
         image_base64=base64.b64encode(image_bytes).decode("utf-8"),
         comfyui_prompt_id=None,
@@ -268,7 +275,7 @@ async def generate_edit(request: Request) -> GenerateResponse:
         pipeline="edit",
         generator_mode="qwen-image-edit",
         filename=output_name,
-        output_url=f"/outputs/{output_name}",
+        output_url=_build_output_url(output_name),
         mime_type="image/png",
         image_base64=base64.b64encode(result.image_bytes).decode("utf-8"),
         comfyui_prompt_id=None,
@@ -493,7 +500,7 @@ async def _generate_with_comfy(
         pipeline="scene",
         generator_mode="comfyui",
         filename=final_name,
-        output_url=f"/outputs/{final_name}",
+        output_url=_build_output_url(final_name),
         mime_type=mime_type,
         image_base64=base64.b64encode(result.image_bytes).decode("utf-8"),
         comfyui_prompt_id=result.prompt_id,
@@ -522,7 +529,7 @@ async def _generate_mock(
         pipeline="scene",
         generator_mode="mock",
         filename=final_name,
-        output_url=f"/outputs/{final_name}",
+        output_url=_build_output_url(final_name),
         mime_type="image/png",
         image_base64=base64.b64encode(mock_bytes).decode("utf-8"),
         comfyui_prompt_id=None,

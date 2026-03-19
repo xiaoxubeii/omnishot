@@ -11,16 +11,16 @@ from urllib import request
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
-DEFAULT_PRODUCT_BRIEF = "premium ecommerce apparel product"
+DEFAULT_PRODUCT_BRIEF = "高端电商服饰商品主图"
 DEFAULT_SCENE_COUNT = 4
 DEFAULT_SCENE_PRESETS = ""
 DEFAULT_TRYON_TEMPLATES = "woman_1,woman_2,woman_3"
 DEFAULT_EDIT_PRESETS = ""
 DEFAULT_TRYON_ANGLE_PRESETS = ""
 TRYON_ANGLE_SUFFIX = (
-    "Keep the exact same model identity, face, hairstyle, body proportions, garment fit, pattern, "
-    "trim, color, and silhouette. Only change the camera viewpoint, framing, and lighting in a "
-    "photorealistic premium ecommerce fashion photo."
+    "保持完全相同的模特身份、面部、发型、身体比例、服装贴合度、花型、"
+    "辅料、颜色和轮廓。只改变镜头视角、取景和灯光，生成照片级真实的"
+    "高级电商时尚图。"
 )
 
 

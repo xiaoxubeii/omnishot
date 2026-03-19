@@ -19,31 +19,31 @@ DEFAULT_SCENES = [
     {
         "name": "sunset_bedroom",
         "prompt": (
-            "luxury silk nightdress product photo on a bedroom chair near a window, "
-            "golden sunset light, warm atmosphere, realistic shadows, premium commercial look"
+            "高端真丝睡裙商品图，放在靠窗的卧室椅子上，"
+            "金色落日光，温暖氛围，真实阴影，高级商业质感"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed fabric, distorted shape, watermark"
+            "模糊，低质量，重复商品，面料变形，轮廓扭曲，水印"
         ),
     },
     {
         "name": "morning_terrace",
         "prompt": (
-            "luxury silk nightdress product photo folded on a terrace table, "
-            "soft morning light, fresh air mood, realistic texture, premium ecommerce style"
+            "高端真丝睡裙商品图，折叠摆放在露台桌面上，"
+            "柔和晨光，清新空气感氛围，真实材质纹理，高级电商风格"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed fabric, distorted shape, watermark"
+            "模糊，低质量，重复商品，面料变形，轮廓扭曲，水印"
         ),
     },
     {
         "name": "neon_storefront",
         "prompt": (
-            "luxury silk nightdress product photo in a fashion storefront display, "
-            "subtle neon reflections, cinematic night ambience, realistic lighting, high detail"
+            "高端真丝睡裙商品图，置于时尚橱窗陈列场景中，"
+            "细微霓虹反射，电影感夜景氛围，真实灯光，高细节"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed fabric, distorted shape, watermark"
+            "模糊，低质量，重复商品，面料变形，轮廓扭曲，水印"
         ),
     },
 ]
@@ -52,8 +52,8 @@ DEFAULT_EDITS = [
     {
         "name": "camera_left_45",
         "angle_preset": "camera_left_45",
-        "prompt": "same exact product, premium ecommerce realism, accurate material response",
-        "negative_prompt": "different product, changed silhouette, blurry, low quality, watermark",
+        "prompt": "完全相同的商品，高级电商写实质感，材质反馈准确",
+        "negative_prompt": "不同商品，轮廓改变，模糊，低质量，水印",
         "use_angle_lora": True,
         "use_lightning": True,
         "steps": 8,
@@ -62,8 +62,8 @@ DEFAULT_EDITS = [
     {
         "name": "camera_right_45",
         "angle_preset": "camera_right_45",
-        "prompt": "same exact product, premium ecommerce realism, accurate material response",
-        "negative_prompt": "different product, changed silhouette, blurry, low quality, watermark",
+        "prompt": "完全相同的商品，高级电商写实质感，材质反馈准确",
+        "negative_prompt": "不同商品，轮廓改变，模糊，低质量，水印",
         "use_angle_lora": True,
         "use_lightning": True,
         "steps": 8,
@@ -72,8 +72,8 @@ DEFAULT_EDITS = [
     {
         "name": "top_down",
         "angle_preset": "top_down",
-        "prompt": "same exact product, premium ecommerce realism, accurate material response",
-        "negative_prompt": "different product, changed silhouette, blurry, low quality, watermark",
+        "prompt": "完全相同的商品，高级电商写实质感，材质反馈准确",
+        "negative_prompt": "不同商品，轮廓改变，模糊，低质量，水印",
         "use_angle_lora": True,
         "use_lightning": True,
         "steps": 8,
@@ -82,8 +82,8 @@ DEFAULT_EDITS = [
     {
         "name": "editorial_light_shift",
         "angle_preset": "editorial_light_shift",
-        "prompt": "same exact product, only restyle the lighting into premium editorial light",
-        "negative_prompt": "different product, changed silhouette, blurry, low quality, watermark",
+        "prompt": "完全相同的商品，只改变灯光为高级杂志感布光",
+        "negative_prompt": "不同商品，轮廓改变，模糊，低质量，水印",
         "use_angle_lora": False,
         "use_lightning": True,
         "steps": 8,

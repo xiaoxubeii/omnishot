@@ -177,9 +177,92 @@
       text-transform: uppercase;
     }
     .stageCanvas {
+      position: relative;
       display: grid;
       place-items: center;
       padding: 20px;
+      isolation: isolate;
+    }
+    .stageBadge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 28px;
+      padding: 6px 12px;
+      border-radius: 999px;
+      border: 1px solid rgba(48, 31, 14, 0.08);
+      background: rgba(255,255,255,0.72);
+      transition: background 160ms ease, color 160ms ease, border-color 160ms ease;
+    }
+    .stageBadge.is-loading {
+      color: var(--warn);
+      border-color: rgba(159, 94, 37, 0.22);
+      background: rgba(255, 246, 236, 0.92);
+    }
+    .stageBadge.is-loading::before {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: badgePulse 1.2s ease-in-out infinite;
+    }
+    .previewStage.is-loading {
+      border-color: rgba(159, 94, 37, 0.18);
+      box-shadow: inset 0 0 0 1px rgba(159, 94, 37, 0.06);
+    }
+    .previewStage.is-loading .stageCanvas::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(115deg,
+          transparent 0%,
+          transparent 24%,
+          rgba(255,255,255,0.10) 34%,
+          rgba(255,255,255,0.66) 46%,
+          rgba(255,255,255,0.10) 58%,
+          transparent 70%,
+          transparent 100%);
+      transform: translateX(-110%);
+      animation: stageSweep 1.8s linear infinite;
+      pointer-events: none;
+      z-index: 2;
+    }
+    .previewStage.is-loading .stageCanvas::after {
+      content: "正在生成，请稍候";
+      position: absolute;
+      left: 50%;
+      bottom: 26px;
+      transform: translateX(-50%);
+      padding: 10px 16px;
+      border-radius: 999px;
+      background: rgba(33, 23, 13, 0.78);
+      color: #fff8f0;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      box-shadow: 0 10px 24px rgba(33, 23, 13, 0.18);
+      animation: loadingFloat 1.6s ease-in-out infinite;
+      pointer-events: none;
+      z-index: 3;
+    }
+    .previewStage.is-loading img {
+      transform: scale(0.985);
+      filter: saturate(0.88) contrast(0.96);
+      opacity: 0.9;
+      transition: transform 160ms ease, filter 160ms ease, opacity 160ms ease;
+    }
+    @keyframes stageSweep {
+      from { transform: translateX(-110%); }
+      to { transform: translateX(110%); }
+    }
+    @keyframes loadingFloat {
+      0%, 100% { transform: translateX(-50%) translateY(0); }
+      50% { transform: translateX(-50%) translateY(-4px); }
+    }
+    @keyframes badgePulse {
+      0%, 100% { transform: scale(0.9); opacity: 0.55; }
+      50% { transform: scale(1.15); opacity: 1; }
     }
     .preview img {
       display: block;
@@ -280,7 +363,7 @@
         <div id="sceneFields">
           <div class="row">
             <label for="productBrief">产品描述</label>
-            <input id="productBrief" value="premium silk nightdress product photo" placeholder="例如：premium silk slip dress product photo">
+            <input id="productBrief" value="高端真丝睡裙电商商品主图" placeholder="例如：高端真丝吊带睡裙商品主图">
           </div>
           <div class="row">
             <label for="scenePreset">场景预设</label>
@@ -339,7 +422,7 @@
           </div>
           <div class="row">
             <label for="editPrompt">补充提示词</label>
-            <textarea id="editPrompt" placeholder="例如：same product on a clean premium white set, polished rim light"></textarea>
+            <textarea id="editPrompt" placeholder="例如：同一件商品，放在干净高级的白色布景中，只强化边缘光和空间层次"></textarea>
           </div>
           <div class="row">
             <label for="editNegativePrompt">反向提示词</label>
@@ -405,16 +488,16 @@
             <div class="previewStage">
               <div class="stageHead">
                 <span>输入图</span>
-                <span id="inputBadge">等待选择</span>
+                <span id="inputBadge" class="stageBadge">等待选择</span>
               </div>
               <div class="stageCanvas">
                 <img id="sourcePreview" alt="输入图预览">
               </div>
             </div>
-            <div class="previewStage">
+            <div id="resultStage" class="previewStage">
               <div class="stageHead">
                 <span>生成结果</span>
-                <span id="resultBadge">等待生成</span>
+                <span id="resultBadge" class="stageBadge">等待生成</span>
               </div>
               <div class="stageCanvas">
                 <img id="result" alt="生成结果将显示在这里">
@@ -429,6 +512,36 @@
   </div>
 
   <script>
+    function buildPlaceholderDataUri(title, subtitle, accent) {
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200">
+          <defs>
+            <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#fcf8f1"/>
+              <stop offset="100%" stop-color="#eadac2"/>
+            </linearGradient>
+            <linearGradient id="panel" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#ffffff" stop-opacity="0.92"/>
+              <stop offset="100%" stop-color="#f4eadc" stop-opacity="0.84"/>
+            </linearGradient>
+          </defs>
+          <rect width="1200" height="1200" fill="url(#bg)"/>
+          <circle cx="240" cy="220" r="180" fill="${accent}" fill-opacity="0.10"/>
+          <circle cx="1010" cy="930" r="210" fill="${accent}" fill-opacity="0.12"/>
+          <rect x="126" y="126" width="948" height="948" rx="54" fill="url(#panel)" stroke="${accent}" stroke-opacity="0.18" stroke-width="4"/>
+          <rect x="252" y="280" width="696" height="484" rx="36" fill="#fffdfa" stroke="${accent}" stroke-opacity="0.16" stroke-width="4"/>
+          <path d="M332 696l134-154c20-22 54-22 74 0l104 116 98-128c21-28 62-29 85-2l144 168" fill="none" stroke="${accent}" stroke-opacity="0.55" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="470" cy="432" r="54" fill="${accent}" fill-opacity="0.34"/>
+          <text x="600" y="880" text-anchor="middle" font-size="72" font-family="'Noto Serif SC','Source Han Serif SC',serif" fill="#5f4a36">${title}</text>
+          <text x="600" y="952" text-anchor="middle" font-size="34" font-family="'Noto Sans SC','PingFang SC',sans-serif" fill="#8a735c">${subtitle}</text>
+        </svg>
+      `;
+      return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg.trim())}`;
+    }
+
+    const SOURCE_PLACEHOLDER = buildPlaceholderDataUri("等待输入商品图", "上传服饰或商品主图后，这里显示当前输入", "#9f5e25");
+    const RESULT_PLACEHOLDER = buildPlaceholderDataUri("等待生成结果", "场景图、模特图或多角度编辑结果会显示在这里", "#7a4b24");
+
     const state = {
       catalogProfiles: [],
       scenePresets: [],
@@ -478,6 +591,7 @@
       sourcePreview: document.getElementById("sourcePreview"),
       inputBadge: document.getElementById("inputBadge"),
       status: document.getElementById("status"),
+      resultStage: document.getElementById("resultStage"),
       result: document.getElementById("result"),
       resultBadge: document.getElementById("resultBadge"),
       batchResults: document.getElementById("batchResults"),
@@ -490,6 +604,26 @@
 
     function setStatus(text) {
       els.status.textContent = text;
+    }
+
+    function setSourcePlaceholder(label = "等待选择") {
+      revokeUploadPreviewUrl();
+      els.sourcePreview.src = SOURCE_PLACEHOLDER;
+      els.inputBadge.textContent = label;
+    }
+
+    function setResultLoading(active, label = active ? "生成中" : "") {
+      els.resultStage.classList.toggle("is-loading", active);
+      els.resultBadge.classList.toggle("is-loading", active);
+      if (label) {
+        els.resultBadge.textContent = label;
+      }
+    }
+
+    function setResultPlaceholder(label = "等待生成") {
+      setResultLoading(false);
+      els.result.src = RESULT_PLACEHOLDER;
+      els.resultBadge.textContent = label;
     }
 
     function getSelectedProfile() {
@@ -576,7 +710,7 @@
     function applyScenePreset() {
       const preset = state.scenePresets.find((item) => item.name === els.scenePreset.value);
       if (!preset) return;
-      const productBrief = els.productBrief.value.trim() || "premium ecommerce product";
+      const productBrief = els.productBrief.value.trim() || "高端电商商品主图";
       els.prompt.value = preset.prompt_template.replace("{product_brief}", productBrief);
       els.negativePrompt.value = preset.negative_prompt || "";
     }
@@ -656,9 +790,7 @@
 
       const image = els.mode.value === "batch" ? els.batchImages.files[0] : els.image.files[0];
       if (!image) {
-        revokeUploadPreviewUrl();
-        els.sourcePreview.removeAttribute("src");
-        els.inputBadge.textContent = "等待选择";
+        setSourcePlaceholder("等待选择");
         return;
       }
 
@@ -675,7 +807,7 @@
       els.clearReuse.disabled = !state.editInputOverride;
     }
 
-    function setLatestResult(data) {
+    function setLatestResult(data, options = {}) {
       const dataUrl = `data:${data.mime_type};base64,${data.image_base64}`;
       const binary = atob(data.image_base64);
       const bytes = new Uint8Array(binary.length);
@@ -689,7 +821,12 @@
         mimeType: data.mime_type,
       };
       els.result.src = dataUrl;
-      els.resultBadge.textContent = data.pipeline || "已生成";
+      if (options.keepLoading) {
+        setResultLoading(true, options.badgeLabel || "生成中");
+      } else {
+        setResultLoading(false);
+        els.resultBadge.textContent = data.pipeline || "已生成";
+      }
       syncEditInputState();
     }
 
@@ -697,6 +834,7 @@
       state.batchEntries = [];
       els.batchResults.innerHTML = "";
       els.meta.textContent = "批量任务准备中。";
+      setResultPlaceholder("等待批量结果");
     }
 
     function appendBatchResult(entry) {
@@ -916,7 +1054,7 @@
       let seed = 1000;
 
       const pushResult = (data, type, variant, sourceName) => {
-        setLatestResult(data);
+        setLatestResult(data, { keepLoading: true, badgeLabel: "批量生成中" });
         appendBatchResult({
           type,
           variant,
@@ -935,7 +1073,7 @@
           const data = await postJson("/generate/scene", {
             filename: file.name,
             image_base64: imageBase64,
-            prompt: scene.prompt_template.replace("{product_brief}", profile.product_brief || els.productBrief.value.trim() || "premium ecommerce product"),
+            prompt: scene.prompt_template.replace("{product_brief}", profile.product_brief || els.productBrief.value.trim() || "高端电商商品主图"),
             negative_prompt: scene.negative_prompt || "",
             seed,
           });
@@ -985,7 +1123,7 @@
             setStatus(`批量中 ${completed + 1}/${totalTasks}: ${sourceName} -> tryon_angle/${templateName}/${preset.name}`);
             const promptParts = [
               preset.prompt_template,
-              "Keep the exact same model identity, face, hairstyle, body proportions, garment fit, pattern, trim, color, and silhouette. Only change the camera viewpoint, framing, and lighting in a photorealistic premium ecommerce fashion photo.",
+              "保持完全相同的模特身份、面部、发型、身体比例、服装贴合度、花型、辅料、颜色和轮廓。只改变镜头视角、取景和灯光，生成照片级真实的高级电商时尚图。",
               profile.tryon_angle_extra_prompt || "",
             ].filter(Boolean);
             const data = await postJson("/generate/edit", {
@@ -1009,6 +1147,7 @@
 
       els.meta.textContent = buildBatchSummary(totalTasks, files.length);
       setStatus(`批量完成，共输出 ${state.batchEntries.length} 张结果。`);
+      setResultLoading(false);
       els.resultBadge.textContent = "批量完成";
       return { pipeline: "batch", generator_mode: "multi-engine", filename: `${files.length} files`, output_url: "", mime_type: "", image_base64: "" };
     }
@@ -1046,6 +1185,17 @@
       els.submit.disabled = true;
       setStatus("请求已发出，等待 GPU 返回结果...");
       els.meta.textContent = "生成中。";
+      if (els.mode.value === "batch") {
+        if (!state.lastResult) {
+          els.result.src = RESULT_PLACEHOLDER;
+        }
+        setResultLoading(true, "批量生成中");
+      } else {
+        if (!state.lastResult) {
+          els.result.src = RESULT_PLACEHOLDER;
+        }
+        setResultLoading(true, "生成中");
+      }
 
       try {
         if (els.mode.value === "batch") {
@@ -1063,11 +1213,19 @@
       } catch (error) {
         setStatus(`失败: ${error.message}`);
         els.meta.textContent = "请检查 API、ComfyUI、CatVTON、Qwen Edit 依赖和模型下载状态。";
+        setResultLoading(false);
+        if (!state.lastResult) {
+          setResultPlaceholder("等待生成");
+        } else {
+          els.resultBadge.textContent = "保留上次结果";
+        }
       } finally {
         els.submit.disabled = false;
       }
     });
 
+    setSourcePlaceholder();
+    setResultPlaceholder();
     updateModeUI();
     syncEditInputState();
     fetchHealth().catch((error) => setStatus(`健康检查失败: ${error.message}`));

@@ -3,72 +3,72 @@ SCENE_PRESETS = [
         "name": "sunset_bedroom_window",
         "title": "落日卧室窗边",
         "prompt_template": (
-            "{product_brief}, placed near a bedroom window, golden sunset rim light, "
-            "soft premium lifestyle styling, realistic commercial shadows, elegant editorial mood"
+            "{product_brief}，放在卧室窗边，带有金色落日边缘光，"
+            "柔和高级生活方式布景，真实商业级阴影，优雅杂志氛围"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "extra straps, extra objects attached to product, watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "多余肩带，商品上附着多余物体，水印，文字"
         ),
     },
     {
         "name": "morning_balcony_fresh",
         "title": "清晨露台",
         "prompt_template": (
-            "{product_brief}, arranged on a bright balcony table, fresh morning sunlight, airy atmosphere, "
-            "natural reflection control, clean luxury ecommerce photography"
+            "{product_brief}，摆放在明亮的露台桌面上，清晨自然阳光，空气感氛围，"
+            "自然反射控制，干净高级的电商摄影"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "水印，文字"
         ),
     },
     {
         "name": "hotel_suite_warmth",
         "title": "酒店套房暖光",
         "prompt_template": (
-            "{product_brief}, styled in a high-end hotel suite, warm tungsten practical lights, "
-            "rich contrast, premium hospitality mood, refined fabric sheen"
+            "{product_brief}，置于高端酒店套房场景，暖色钨丝灯实景光源，"
+            "层次丰富的明暗对比，高级酒店感氛围，精致面料光泽"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "messy clutter, watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "背景杂乱，水印，文字"
         ),
     },
     {
         "name": "studio_softbox_catalog",
         "title": "棚拍目录风",
         "prompt_template": (
-            "{product_brief}, clean studio catalogue shot, three-point softbox lighting, "
-            "controlled highlight rolloff, subtle gradient backdrop, premium retail finish"
+            "{product_brief}，干净棚拍目录图，三点柔光箱布光，"
+            "高光过渡受控，细腻渐变背景，高级零售成片质感"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "水印，文字"
         ),
     },
     {
         "name": "vanity_evening_glamour",
         "title": "梳妆台夜景",
         "prompt_template": (
-            "{product_brief}, near a vanity mirror with bulb lights, glamorous evening ambience, "
-            "beauty editorial composition, warm reflections, polished commercial aesthetic"
+            "{product_brief}，靠近带灯泡的梳妆镜，夜晚华丽氛围，"
+            "美妆杂志式构图，温暖反射，精致商业美学"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "水印，文字"
         ),
     },
     {
         "name": "rainy_window_storytelling",
         "title": "雨窗氛围",
         "prompt_template": (
-            "{product_brief}, placed near a rainy window, cool overcast daylight mixed with warm indoor fill, "
-            "cinematic storytelling, premium luxury campaign lighting"
+            "{product_brief}，置于雨窗旁，冷调阴天日光混合室内暖补光，"
+            "电影感叙事氛围，高级广告灯光"
         ),
         "negative_prompt": (
-            "blurry, low quality, duplicate product, deformed garment, changed product silhouette, "
-            "watermark, text"
+            "模糊，低质量，重复商品，服装变形，商品轮廓改变，"
+            "水印，文字"
         ),
     },
 ]
@@ -79,13 +79,13 @@ EDIT_PRESETS = [
         "name": "camera_left_45",
         "title": "左转 45 度",
         "prompt_template": (
-            "Move the camera to the left and rotate 45 degrees to the left. "
-            "Keep the exact same product identity, fabric, trim, logo, and proportions. "
-            "Photorealistic premium ecommerce product photography."
+            "镜头向左移动并左转 45 度。"
+            "保持完全相同的商品身份、面料、辅料、标志和比例。"
+            "照片级真实，高级电商商品摄影。"
         ),
         "negative_prompt": (
-            "different product, changed silhouette, changed length, changed neckline, changed sleeve, "
-            "extra accessories, duplicate object, broken geometry, blurry, low quality, watermark, text"
+            "不同商品，轮廓改变，长度改变，领口改变，袖型改变，"
+            "多余配饰，重复物体，几何结构损坏，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": True,
     },
@@ -93,13 +93,13 @@ EDIT_PRESETS = [
         "name": "camera_right_45",
         "title": "右转 45 度",
         "prompt_template": (
-            "Move the camera to the right and rotate 45 degrees to the right. "
-            "Keep the exact same product identity, fabric, trim, logo, and proportions. "
-            "Photorealistic premium ecommerce product photography."
+            "镜头向右移动并右转 45 度。"
+            "保持完全相同的商品身份、面料、辅料、标志和比例。"
+            "照片级真实，高级电商商品摄影。"
         ),
         "negative_prompt": (
-            "different product, changed silhouette, changed length, changed neckline, changed sleeve, "
-            "extra accessories, duplicate object, broken geometry, blurry, low quality, watermark, text"
+            "不同商品，轮廓改变，长度改变，领口改变，袖型改变，"
+            "多余配饰，重复物体，几何结构损坏，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": True,
     },
@@ -107,11 +107,11 @@ EDIT_PRESETS = [
         "name": "top_down",
         "title": "俯视镜头",
         "prompt_template": (
-            "Turn the camera to a top-down view. Keep the exact same product identity, shape, fabric sheen, "
-            "and material details. Premium ecommerce product editing."
+            "把镜头切换到俯视视角。保持完全相同的商品身份、外形、面料光泽"
+            "和材质细节。高级电商商品编辑图。"
         ),
         "negative_prompt": (
-            "different product, changed silhouette, changed color, broken geometry, blurry, low quality, watermark, text"
+            "不同商品，轮廓改变，颜色改变，几何结构损坏，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": True,
     },
@@ -119,11 +119,11 @@ EDIT_PRESETS = [
         "name": "close_up_detail",
         "title": "特写细节",
         "prompt_template": (
-            "Turn the camera to a close-up shot focusing on the garment texture and sewing details. "
-            "Keep the exact same product identity and material behavior. Premium ecommerce detail shot."
+            "将镜头切到服装纹理与缝线细节特写。"
+            "保持完全相同的商品身份和材质表现。高级电商细节图。"
         ),
         "negative_prompt": (
-            "different product, changed texture, fake embroidery, extra accessories, blurry, low quality, watermark, text"
+            "不同商品，纹理改变，假刺绣，多余配饰，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": True,
     },
@@ -131,12 +131,12 @@ EDIT_PRESETS = [
         "name": "wide_angle_context",
         "title": "广角氛围",
         "prompt_template": (
-            "Turn the camera to a wide-angle lens while keeping the product as the hero subject. "
-            "Retain the same product identity, silhouette, and fabric characteristics. "
-            "Luxury editorial ecommerce image."
+            "把镜头切换为广角，同时保持商品仍然是主体。"
+            "保留相同的商品身份、轮廓和面料特征。"
+            "高级杂志感电商图片。"
         ),
         "negative_prompt": (
-            "different product, tiny subject, changed silhouette, deformed shape, blurry, low quality, watermark, text"
+            "不同商品，主体过小，轮廓改变，形状变形，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": True,
     },
@@ -144,11 +144,11 @@ EDIT_PRESETS = [
         "name": "editorial_light_shift",
         "title": "仅改光线",
         "prompt_template": (
-            "Keep the same camera angle and the exact same product identity. "
-            "Only restyle the lighting into polished luxury editorial light with realistic highlights and shadows."
+            "保持相同机位和完全相同的商品身份。"
+            "只重塑灯光为高级杂志式光线，保留真实高光与阴影。"
         ),
         "negative_prompt": (
-            "different product, changed pose, changed silhouette, changed trim, duplicate object, blurry, low quality, watermark, text"
+            "不同商品，姿态改变，轮廓改变，辅料改变，重复物体，模糊，低质量，水印，文字"
         ),
         "use_angle_lora": False,
     },
@@ -162,7 +162,7 @@ CATALOG_PROFILES = [
         "description": (
             "针对丝绸/缎面睡裙、吊带裙、居家轻奢睡衣。优先输出卧室、露台、酒店暖光和模特上身多角度图。"
         ),
-        "product_brief": "premium silk nightdress, satin slip dress, luxury sleepwear ecommerce product photo",
+        "product_brief": "高端真丝睡裙，缎面吊带裙，轻奢睡衣电商商品主图",
         "scene_presets": [
             "sunset_bedroom_window",
             "morning_balcony_fresh",
@@ -174,12 +174,12 @@ CATALOG_PROFILES = [
         "tryon_angle_presets": ["camera_left_45", "camera_right_45"],
         "cloth_type": "overall",
         "edit_extra_prompt": (
-            "Preserve the exact same sleepwear silhouette, hem length, neckline, lace trim, and silky drape. "
-            "Emphasize refined fabric sheen and premium ecommerce styling."
+            "保持完全相同的睡裙轮廓、下摆长度、领口、蕾丝辅料和丝滑垂感。"
+            "强调精致面料光泽和高级电商陈列感。"
         ),
         "tryon_angle_extra_prompt": (
-            "Maintain graceful sleepwear presentation, elegant drape, clean premium studio styling, "
-            "and realistic high-end fashion lighting."
+            "保持优雅的睡裙展示效果、自然垂坠、干净高级棚拍风格，"
+            "以及真实的高端时尚灯光。"
         ),
     },
     {
@@ -188,7 +188,7 @@ CATALOG_PROFILES = [
         "description": (
             "用于更强调材质、贴身剪裁和灯光轮廓的内衣或性感家居服商品图。"
         ),
-        "product_brief": "premium lingerie or intimate apparel ecommerce product photo with refined material detail",
+        "product_brief": "高端内衣或贴身服饰电商商品主图，强调精致材质细节",
         "scene_presets": [
             "studio_softbox_catalog",
             "vanity_evening_glamour",
@@ -199,10 +199,10 @@ CATALOG_PROFILES = [
         "tryon_angle_presets": ["camera_left_45", "close_up_detail"],
         "cloth_type": "upper",
         "edit_extra_prompt": (
-            "Keep the exact same garment fit, strap construction, cup shape, lace placement, and premium material behavior."
+            "保持完全相同的服装贴合度、肩带结构、杯型、蕾丝位置和高级材质表现。"
         ),
         "tryon_angle_extra_prompt": (
-            "Keep the same model identity and the same intimate garment fit. Focus on elegance, realism, and clean editorial lighting."
+            "保持相同的模特身份和相同的贴身服饰贴合效果，重点表现优雅、真实和干净的杂志式灯光。"
         ),
     },
     {
@@ -211,7 +211,7 @@ CATALOG_PROFILES = [
         "description": (
             "适合普通女装、上装、连衣裙的稳定目录图批量生成，兼顾场景图、模特图和多角度。"
         ),
-        "product_brief": "premium apparel ecommerce product photo with clean retail styling",
+        "product_brief": "高端常规服饰电商商品主图，零售陈列风格干净利落",
         "scene_presets": [
             "studio_softbox_catalog",
             "morning_balcony_fresh",
@@ -222,10 +222,10 @@ CATALOG_PROFILES = [
         "tryon_angle_presets": ["camera_left_45", "camera_right_45"],
         "cloth_type": "overall",
         "edit_extra_prompt": (
-            "Keep the exact same garment identity, retail-ready shape, stitching, and fabric behavior."
+            "保持完全相同的服装身份、零售成衣轮廓、缝线结构和面料表现。"
         ),
         "tryon_angle_extra_prompt": (
-            "Retain the same model, same garment fit, same proportions, and same commercial retail styling."
+            "保持相同模特、相同穿着贴合度、相同比例和相同商业零售风格。"
         ),
     },
 ]

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import argparse
+import base64
+import binascii
 import json
 import mimetypes
 import os
 import subprocess
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from mcp.server.fastmcp import FastMCP
@@ -47,6 +50,89 @@ class OmnishotAPI:
             return _parse_http_response(response)
 
 
+def _is_http_url(value: str) -> bool:
+    lowered = value.strip().lower()
+    return lowered.startswith("http://") or lowered.startswith("https://")
+
+
+def _strip_data_url_prefix(value: str) -> str:
+    if value.startswith("data:"):
+        _, _, payload = value.partition(",")
+        return payload
+    return value
+
+
+def _decode_base64_payload(value: str, field_name: str) -> bytes:
+    try:
+        return base64.b64decode(_strip_data_url_prefix(value), validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise ValueError(f"Invalid base64 payload for {field_name}") from exc
+
+
+def _guess_filename_from_url(url: str, fallback: str) -> str:
+    path = Path(urlsplit(url).path)
+    return path.name or fallback
+
+
+async def _load_binary_source(
+    *,
+    path_value: str | None = None,
+    url_value: str | None = None,
+    base64_value: str | None = None,
+    filename: str | None = None,
+    default_filename: str,
+    timeout_seconds: float,
+) -> tuple[str, bytes, str]:
+    normalized_path = path_value.strip() if path_value else ""
+    normalized_url = url_value.strip() if url_value else ""
+    normalized_base64 = base64_value.strip() if base64_value else ""
+    if normalized_path and _is_http_url(normalized_path) and not normalized_url:
+        normalized_url = normalized_path
+        normalized_path = ""
+
+    provided = [
+        ("path", normalized_path),
+        ("url", normalized_url),
+        ("base64", normalized_base64),
+    ]
+    active = [(kind, value) for kind, value in provided if value]
+    if not active:
+        raise ValueError("One of image_path/image_url/image_base64 must be provided.")
+    if len(active) > 1:
+        kinds = ", ".join(kind for kind, _ in active)
+        raise ValueError(f"Provide exactly one image source, got: {kinds}")
+
+    source_kind, source_value = active[0]
+    resolved_filename = (filename or default_filename).strip() or default_filename
+
+    if source_kind == "path":
+        file_path = _resolve_path(source_value)
+        if not file_path.is_file():
+            raise ValueError(f"Image file not found: {file_path}")
+        return (
+            file_path.name,
+            file_path.read_bytes(),
+            mimetypes.guess_type(file_path.name)[0] or "application/octet-stream",
+        )
+
+    if source_kind == "url":
+        async with httpx.AsyncClient(timeout=timeout_seconds, follow_redirects=True) as client:
+            response = await client.get(source_value)
+            response.raise_for_status()
+        guessed_name = filename or _guess_filename_from_url(source_value, default_filename)
+        mime_type = response.headers.get("content-type", "").split(";", 1)[0].strip() or (
+            mimetypes.guess_type(guessed_name)[0] or "application/octet-stream"
+        )
+        return (guessed_name, response.content, mime_type)
+
+    image_bytes = _decode_base64_payload(source_value, "image_base64")
+    return (
+        resolved_filename,
+        image_bytes,
+        mimetypes.guess_type(resolved_filename)[0] or "application/octet-stream",
+    )
+
+
 def _parse_http_response(response: httpx.Response) -> dict[str, Any]:
     text = response.text
     try:
@@ -62,14 +148,42 @@ def _parse_http_response(response: httpx.Response) -> dict[str, Any]:
     return payload
 
 
-def _compact_generation_payload(payload: dict[str, Any], include_image_base64: bool) -> dict[str, Any]:
+def _resolve_output_url(api_base_url: str, output_url: str | None) -> str | None:
+    if not output_url:
+        return None
+    if _is_http_url(output_url):
+        return output_url
+    return urljoin(f"{api_base_url.rstrip('/')}/", output_url.lstrip("/"))
+
+
+def _materialize_local_output(payload: dict[str, Any]) -> str | None:
+    filename = str(payload.get("filename") or "").strip()
+    if not filename:
+        return None
+    target = settings.output_dir / filename
+    image_base64 = payload.get("image_base64")
+    if image_base64:
+        settings.output_dir.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(_decode_base64_payload(str(image_base64), "image_base64"))
+        return str(target)
+    return str(target) if target.exists() else None
+
+
+def _compact_generation_payload(
+    payload: dict[str, Any],
+    *,
+    include_image_base64: bool,
+    api_base_url: str,
+) -> dict[str, Any]:
+    resolved_output_url = _resolve_output_url(api_base_url, payload.get("output_url"))
     result = {
         "prompt_id": payload.get("prompt_id"),
         "pipeline": payload.get("pipeline"),
         "generator_mode": payload.get("generator_mode"),
         "filename": payload.get("filename"),
         "output_url": payload.get("output_url"),
-        "output_path": str(settings.output_dir / payload["filename"]) if payload.get("filename") else None,
+        "resolved_output_url": resolved_output_url,
+        "output_path": _materialize_local_output(payload),
         "mime_type": payload.get("mime_type"),
         "local_input_path": payload.get("local_input_path"),
         "metadata": payload.get("metadata", {}),
@@ -91,11 +205,12 @@ def _build_server(
     server = FastMCP(
         name="omnishot",
         instructions=(
-            "Use these tools to interact with the local Omnishot ecommerce image pipeline. "
+            "Use these tools to interact with the Omnishot ecommerce image pipeline. "
             "Scene tools preserve the original product while changing scene and lighting. "
             "Try-on tools render model-wearing images through CatVTON. "
             "Edit tools use Qwen-Image-Edit-2509 plus multiple-angle LoRA for online editing and viewpoint changes. "
-            "The local FastAPI backend and ComfyUI services should be running before generation."
+            "The FastAPI backend and ComfyUI services should be running before generation. "
+            "For remote deployments, prefer image_url or image_base64 when the caller does not share the same filesystem."
         ),
         host=host,
         port=port,
@@ -198,24 +313,30 @@ def _build_server(
     @server.tool(
         name="generate_scene",
         description=(
-            "Generate a product scene image from a local image path. "
+            "Generate a product scene image from a local image path, remote image URL, or base64 payload. "
             "This changes scene and lighting while keeping the original product identity."
         ),
         structured_output=True,
     )
     async def generate_scene(
-        image_path: str,
         prompt: str,
+        image_path: str | None = None,
+        image_url: str | None = None,
+        image_base64: str | None = None,
+        filename: str | None = None,
         negative_prompt: str = "",
         seed: int | None = None,
         include_image_base64: bool = False,
         timeout_seconds: float = 1800.0,
     ) -> dict[str, Any]:
-        image_file = _resolve_path(image_path)
-        if not image_file.is_file():
-            raise ValueError(f"Image file not found: {image_file}")
-
-        mime_type = mimetypes.guess_type(image_file.name)[0] or "application/octet-stream"
+        resolved_filename, image_bytes, mime_type = await _load_binary_source(
+            path_value=image_path,
+            url_value=image_url,
+            base64_value=image_base64,
+            filename=filename,
+            default_filename="scene.png",
+            timeout_seconds=min(timeout_seconds, 120.0),
+        )
         data = {
             "prompt": prompt,
             "negative_prompt": negative_prompt,
@@ -225,24 +346,34 @@ def _build_server(
 
         payload = await api.post_multipart(
             "/generate/scene",
-            files={"image": (image_file.name, image_file.read_bytes(), mime_type)},
+            files={"image": (resolved_filename, image_bytes, mime_type)},
             data=data,
             timeout_seconds=timeout_seconds,
         )
-        return _compact_generation_payload(payload, include_image_base64=include_image_base64)
+        return _compact_generation_payload(
+            payload,
+            include_image_base64=include_image_base64,
+            api_base_url=api_base_url,
+        )
 
     @server.tool(
         name="generate_tryon",
         description=(
-            "Generate a model try-on image from a local cloth image path, with either a built-in template "
-            "or a custom person image path."
+            "Generate a model try-on image from a cloth image path, remote image URL, or base64 payload, "
+            "with either a built-in template or a custom person image."
         ),
         structured_output=True,
     )
     async def generate_tryon(
-        cloth_image_path: str,
+        cloth_image_path: str | None = None,
+        cloth_image_url: str | None = None,
+        cloth_image_base64: str | None = None,
+        cloth_filename: str | None = None,
         person_template: str = "woman_1",
         person_image_path: str | None = None,
+        person_image_url: str | None = None,
+        person_image_base64: str | None = None,
+        person_filename: str | None = None,
         cloth_type: Literal["upper", "lower", "overall"] = "overall",
         steps: int = 30,
         guidance: float = 2.5,
@@ -250,25 +381,34 @@ def _build_server(
         include_image_base64: bool = False,
         timeout_seconds: float = 3600.0,
     ) -> dict[str, Any]:
-        cloth_file = _resolve_path(cloth_image_path)
-        if not cloth_file.is_file():
-            raise ValueError(f"Cloth image file not found: {cloth_file}")
-
+        cloth_name, cloth_bytes, cloth_mime = await _load_binary_source(
+            path_value=cloth_image_path,
+            url_value=cloth_image_url,
+            base64_value=cloth_image_base64,
+            filename=cloth_filename,
+            default_filename="cloth.png",
+            timeout_seconds=min(timeout_seconds, 120.0),
+        )
         files: dict[str, tuple[str, bytes, str]] = {
             "image": (
-                cloth_file.name,
-                cloth_file.read_bytes(),
-                mimetypes.guess_type(cloth_file.name)[0] or "application/octet-stream",
+                cloth_name,
+                cloth_bytes,
+                cloth_mime,
             )
         }
-        if person_image_path:
-            person_file = _resolve_path(person_image_path)
-            if not person_file.is_file():
-                raise ValueError(f"Person image file not found: {person_file}")
+        if person_image_path or person_image_url or person_image_base64:
+            person_name, person_bytes, person_mime = await _load_binary_source(
+                path_value=person_image_path,
+                url_value=person_image_url,
+                base64_value=person_image_base64,
+                filename=person_filename,
+                default_filename="person.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
             files["person_image"] = (
-                person_file.name,
-                person_file.read_bytes(),
-                mimetypes.guess_type(person_file.name)[0] or "application/octet-stream",
+                person_name,
+                person_bytes,
+                person_mime,
             )
 
         data = {
@@ -284,18 +424,25 @@ def _build_server(
             data=data,
             timeout_seconds=timeout_seconds,
         )
-        return _compact_generation_payload(payload, include_image_base64=include_image_base64)
+        return _compact_generation_payload(
+            payload,
+            include_image_base64=include_image_base64,
+            api_base_url=api_base_url,
+        )
 
     @server.tool(
         name="generate_edit",
         description=(
-            "Generate a Qwen-based edited product image from a local image path. "
+            "Generate a Qwen-based edited product image from a local image path, remote image URL, or base64 payload. "
             "Supports camera-angle presets and prompt-based online image editing."
         ),
         structured_output=True,
     )
     async def generate_edit(
-        image_path: str,
+        image_path: str | None = None,
+        image_url: str | None = None,
+        image_base64: str | None = None,
+        filename: str | None = None,
         prompt: str = "",
         angle_preset: str | None = None,
         negative_prompt: str = "",
@@ -311,10 +458,14 @@ def _build_server(
         include_image_base64: bool = False,
         timeout_seconds: float = 3600.0,
     ) -> dict[str, Any]:
-        image_file = _resolve_path(image_path)
-        if not image_file.is_file():
-            raise ValueError(f"Image file not found: {image_file}")
-
+        resolved_filename, image_bytes, mime_type = await _load_binary_source(
+            path_value=image_path,
+            url_value=image_url,
+            base64_value=image_base64,
+            filename=filename,
+            default_filename="edit.png",
+            timeout_seconds=min(timeout_seconds, 120.0),
+        )
         data = {
             "prompt": prompt,
             "negative_prompt": negative_prompt,
@@ -336,15 +487,19 @@ def _build_server(
             "/generate/edit",
             files={
                 "image": (
-                    image_file.name,
-                    image_file.read_bytes(),
-                    mimetypes.guess_type(image_file.name)[0] or "application/octet-stream",
+                    resolved_filename,
+                    image_bytes,
+                    mime_type,
                 )
             },
             data=data,
             timeout_seconds=timeout_seconds,
         )
-        return _compact_generation_payload(payload, include_image_base64=include_image_base64)
+        return _compact_generation_payload(
+            payload,
+            include_image_base64=include_image_base64,
+            api_base_url=api_base_url,
+        )
 
     @server.tool(
         name="run_catalog_batch_once",
@@ -357,7 +512,7 @@ def _build_server(
     def run_catalog_batch_once(
         input_dir: str,
         output_dir: str,
-        product_brief: str = "premium ecommerce apparel product",
+        product_brief: str = "高端电商服饰商品主图",
         scene_count: int = 4,
         tryon_templates: list[str] | None = None,
         cloth_type: Literal["upper", "lower", "overall"] = "overall",
