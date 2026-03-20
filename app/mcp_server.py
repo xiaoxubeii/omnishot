@@ -41,7 +41,7 @@ class OmnishotAPI:
         self,
         path: str,
         *,
-        files: dict[str, tuple[str, bytes, str]],
+        files: dict[str, tuple[str, bytes, str]] | list[tuple[str, tuple[str, bytes, str]]],
         data: dict[str, str],
         timeout_seconds: float,
     ) -> dict[str, Any]:
@@ -207,8 +207,10 @@ def _build_server(
         instructions=(
             "Use these tools to interact with the Omnishot ecommerce image pipeline. "
             "Scene tools preserve the original product while changing scene and lighting. "
+            "Reference-scene tools use style reference images plus Chinese prompts to build a new scene candidate, then lock the original product back into the final image. "
             "Try-on tools render model-wearing images through CatVTON. "
-            "Edit tools use Qwen-Image-Edit-2509 plus multiple-angle LoRA for online editing and viewpoint changes. "
+            "Edit tools use Qwen-Image-Edit-2511 for high-fidelity product editing. "
+            "Edit requests may include one style reference image and one angle reference image. "
             "The FastAPI backend and ComfyUI services should be running before generation. "
             "For remote deployments, prefer image_url or image_base64 when the caller does not share the same filesystem."
         ),
@@ -357,6 +359,116 @@ def _build_server(
         )
 
     @server.tool(
+        name="generate_reference_scene",
+        description=(
+            "Generate a style-reference-driven product scene. "
+            "This mode keeps the uploaded product as the final foreground subject, "
+            "uses one or more style reference images plus a Chinese prompt to create a new scene candidate, "
+            "then composites the original product back with shadow, reflection, and color harmonization."
+        ),
+        structured_output=True,
+    )
+    async def generate_reference_scene(
+        image_path: str | None = None,
+        image_url: str | None = None,
+        image_base64: str | None = None,
+        filename: str | None = None,
+        prompt: str = "",
+        negative_prompt: str = "",
+        steps: int = 8,
+        true_cfg_scale: float = 1.0,
+        seed: int = 123,
+        width: int | None = None,
+        height: int | None = None,
+        shadow_strength: float = 0.4,
+        reflection_strength: float = 0.14,
+        color_harmonize_strength: float = 0.18,
+        style_reference_image_paths: list[str] | None = None,
+        style_reference_image_urls: list[str] | None = None,
+        style_reference_image_base64_list: list[str] | None = None,
+        include_image_base64: bool = False,
+        timeout_seconds: float = 3600.0,
+    ) -> dict[str, Any]:
+        resolved_filename, image_bytes, mime_type = await _load_binary_source(
+            path_value=image_path,
+            url_value=image_url,
+            base64_value=image_base64,
+            filename=filename,
+            default_filename="reference-scene.png",
+            timeout_seconds=min(timeout_seconds, 120.0),
+        )
+        files: list[tuple[str, tuple[str, bytes, str]]] = [
+            (
+                "image",
+                (
+                    resolved_filename,
+                    image_bytes,
+                    mime_type,
+                ),
+            )
+        ]
+        data = {
+            "prompt": prompt,
+            "negative_prompt": negative_prompt,
+            "steps": str(steps),
+            "true_cfg_scale": str(true_cfg_scale),
+            "seed": str(seed),
+            "shadow_strength": str(shadow_strength),
+            "reflection_strength": str(reflection_strength),
+            "color_harmonize_strength": str(color_harmonize_strength),
+        }
+        if width is not None:
+            data["width"] = str(width)
+        if height is not None:
+            data["height"] = str(height)
+
+        style_paths = style_reference_image_paths or []
+        style_urls = style_reference_image_urls or []
+        style_base64_list = style_reference_image_base64_list or []
+        total_style_sources = len(style_paths) + len(style_urls) + len(style_base64_list)
+        if total_style_sources == 0:
+            raise ValueError("At least one style reference image source is required.")
+
+        for index, path_value in enumerate(style_paths, start=1):
+            style_name, style_bytes, style_mime = await _load_binary_source(
+                path_value=path_value,
+                filename=f"style-reference-{index}.png",
+                default_filename=f"style-reference-{index}.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
+            files.append(("style_reference_images", (style_name, style_bytes, style_mime)))
+
+        for index, url_value in enumerate(style_urls, start=len(style_paths) + 1):
+            style_name, style_bytes, style_mime = await _load_binary_source(
+                url_value=url_value,
+                filename=f"style-reference-{index}.png",
+                default_filename=f"style-reference-{index}.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
+            files.append(("style_reference_images", (style_name, style_bytes, style_mime)))
+
+        for index, base64_value in enumerate(style_base64_list, start=len(style_paths) + len(style_urls) + 1):
+            style_name, style_bytes, style_mime = await _load_binary_source(
+                base64_value=base64_value,
+                filename=f"style-reference-{index}.png",
+                default_filename=f"style-reference-{index}.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
+            files.append(("style_reference_images", (style_name, style_bytes, style_mime)))
+
+        payload = await api.post_multipart(
+            "/generate/reference-scene",
+            files=files,
+            data=data,
+            timeout_seconds=timeout_seconds,
+        )
+        return _compact_generation_payload(
+            payload,
+            include_image_base64=include_image_base64,
+            api_base_url=api_base_url,
+        )
+
+    @server.tool(
         name="generate_tryon",
         description=(
             "Generate a model try-on image from a cloth image path, remote image URL, or base64 payload, "
@@ -434,7 +546,7 @@ def _build_server(
         name="generate_edit",
         description=(
             "Generate a Qwen-based edited product image from a local image path, remote image URL, or base64 payload. "
-            "Supports camera-angle presets and prompt-based online image editing."
+            "Supports camera-angle presets, prompt-based online image editing, one style reference image, and one angle reference image."
         ),
         structured_output=True,
     )
@@ -446,15 +558,23 @@ def _build_server(
         prompt: str = "",
         angle_preset: str | None = None,
         negative_prompt: str = "",
-        use_angle_lora: bool = True,
+        use_angle_lora: bool = False,
         angle_lora_scale: float = 1.0,
-        use_lightning: bool = True,
+        use_lightning: bool = False,
         lightning_lora_scale: float = 1.0,
         steps: int = 8,
         true_cfg_scale: float = 1.0,
         seed: int = 123,
         width: int | None = None,
         height: int | None = None,
+        style_reference_image_path: str | None = None,
+        style_reference_image_url: str | None = None,
+        style_reference_image_base64: str | None = None,
+        style_reference_filename: str | None = None,
+        angle_reference_image_path: str | None = None,
+        angle_reference_image_url: str | None = None,
+        angle_reference_image_base64: str | None = None,
+        angle_reference_filename: str | None = None,
         include_image_base64: bool = False,
         timeout_seconds: float = 3600.0,
     ) -> dict[str, Any]:
@@ -482,16 +602,47 @@ def _build_server(
             data["width"] = str(width)
         if height is not None:
             data["height"] = str(height)
+        files = {
+            "image": (
+                resolved_filename,
+                image_bytes,
+                mime_type,
+            )
+        }
+
+        if style_reference_image_path or style_reference_image_url or style_reference_image_base64:
+            style_name, style_bytes, style_mime = await _load_binary_source(
+                path_value=style_reference_image_path,
+                url_value=style_reference_image_url,
+                base64_value=style_reference_image_base64,
+                filename=style_reference_filename,
+                default_filename="style-reference.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
+            files["style_reference_image"] = (
+                style_name,
+                style_bytes,
+                style_mime,
+            )
+
+        if angle_reference_image_path or angle_reference_image_url or angle_reference_image_base64:
+            angle_name, angle_bytes, angle_mime = await _load_binary_source(
+                path_value=angle_reference_image_path,
+                url_value=angle_reference_image_url,
+                base64_value=angle_reference_image_base64,
+                filename=angle_reference_filename,
+                default_filename="angle-reference.png",
+                timeout_seconds=min(timeout_seconds, 120.0),
+            )
+            files["angle_reference_image"] = (
+                angle_name,
+                angle_bytes,
+                angle_mime,
+            )
 
         payload = await api.post_multipart(
             "/generate/edit",
-            files={
-                "image": (
-                    resolved_filename,
-                    image_bytes,
-                    mime_type,
-                )
-            },
+            files=files,
             data=data,
             timeout_seconds=timeout_seconds,
         )
@@ -560,6 +711,64 @@ def _build_server(
         return {
             "status": "ok",
             "input_dir": str(resolved_input),
+            "output_dir": str(resolved_output),
+            "manifest_path": str(resolved_output / "manifest.jsonl"),
+            "stdout": completed.stdout,
+            "stderr": completed.stderr,
+        }
+
+    @server.tool(
+        name="run_reference_scene_batch_once",
+        description=(
+            "Run one batch pass over product images using a JSON plan file of style references and prompts. "
+            "This calls the dedicated reference-scene generation pipeline."
+        ),
+        structured_output=True,
+    )
+    def run_reference_scene_batch_once(
+        input_dir: str,
+        plan_file: str,
+        output_dir: str,
+        timeout_seconds: float = 3600.0,
+    ) -> dict[str, Any]:
+        resolved_input = _resolve_path(input_dir)
+        resolved_plan = _resolve_path(plan_file)
+        resolved_output = _resolve_path(output_dir)
+        if not resolved_input.is_dir():
+            raise ValueError(f"Input directory not found: {resolved_input}")
+        if not resolved_plan.is_file():
+            raise ValueError(f"Plan file not found: {resolved_plan}")
+
+        cmd = [
+            str(settings.python_bin),
+            str(ROOT_DIR / "scripts/reference_scene_batch.py"),
+            "--api-base-url",
+            api_base_url,
+            "--input-dir",
+            str(resolved_input),
+            "--plan-file",
+            str(resolved_plan),
+            "--output-dir",
+            str(resolved_output),
+            "--timeout",
+            str(timeout_seconds),
+        ]
+        completed = subprocess.run(
+            cmd,
+            cwd=str(ROOT_DIR),
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"reference_scene_batch failed with exit code {completed.returncode}\n"
+                f"STDOUT:\n{completed.stdout}\nSTDERR:\n{completed.stderr}"
+            )
+        return {
+            "status": "ok",
+            "input_dir": str(resolved_input),
+            "plan_file": str(resolved_plan),
             "output_dir": str(resolved_output),
             "manifest_path": str(resolved_output / "manifest.jsonl"),
             "stdout": completed.stdout,

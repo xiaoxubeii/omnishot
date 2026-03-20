@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     python_bin: Path = ROOT_DIR / ".venv" / "bin" / "python"
     catvton_script: Path = ROOT_DIR / "scripts" / "run_catvton_tryon.py"
     catvton_root: Path = ROOT_DIR.parent / "CatVTON"
-    qwen_edit_model_id: str = "Qwen/Qwen-Image-Edit-2509"
+    qwen_edit_model_id: str = "Qwen/Qwen-Image-Edit-2511"
     qwen_edit_lightning_repo: str = "lightx2v/Qwen-Image-Lightning"
     qwen_edit_lightning_filename: str = "Qwen-Image-Edit-Lightning-8steps-V1.0-bf16.safetensors"
     qwen_edit_angle_lora_repo: str = "dx8152/Qwen-Edit-2509-Multiple-angles"
@@ -35,8 +35,8 @@ class Settings(BaseSettings):
     qwen_edit_default_height: int = 1024
     qwen_edit_default_max_side: int = 1024
     qwen_edit_cpu_offload: bool = True
-    qwen_edit_enable_lightning: bool = True
-    qwen_edit_enable_angle_lora: bool = True
+    qwen_edit_enable_lightning: bool = False
+    qwen_edit_enable_angle_lora: bool = False
 
     upload_dir: Path = ROOT_DIR / "data" / "input"
     output_dir: Path = ROOT_DIR / "data" / "output"

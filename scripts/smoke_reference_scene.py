@@ -10,21 +10,22 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Smoke test for /generate/edit endpoint.")
-    parser.add_argument("--url", default="http://127.0.0.1:8000/generate/edit")
+    parser = argparse.ArgumentParser(description="Smoke test for /generate/reference-scene endpoint.")
+    parser.add_argument("--url", default="http://127.0.0.1:8000/generate/reference-scene")
     parser.add_argument("--image", type=Path, required=True)
-    parser.add_argument("--prompt", default="")
-    parser.add_argument("--angle-preset", default="camera_left_45")
+    parser.add_argument("--style-reference", type=Path, action="append", required=True)
+    parser.add_argument("--prompt", required=True)
     parser.add_argument("--negative-prompt", default="")
-    parser.add_argument("--style-reference", type=Path)
-    parser.add_argument("--angle-reference", type=Path)
     parser.add_argument("--steps", type=int, default=8)
     parser.add_argument("--true-cfg-scale", type=float, default=1.0)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--shadow-strength", type=float, default=0.4)
+    parser.add_argument("--reflection-strength", type=float, default=0.14)
+    parser.add_argument("--color-harmonize-strength", type=float, default=0.18)
     parser.add_argument(
         "--save-to",
         type=Path,
-        default=ROOT_DIR / "data" / "output" / "smoke-edit-latest.png",
+        default=ROOT_DIR / "data" / "output" / "smoke-reference-scene-latest.png",
     )
     return parser.parse_args()
 
@@ -34,23 +35,18 @@ def main() -> int:
     payload = {
         "filename": args.image.name,
         "image_base64": base64.b64encode(args.image.read_bytes()).decode("utf-8"),
+        "style_reference_images_base64": [
+            base64.b64encode(path.read_bytes()).decode("utf-8") for path in args.style_reference
+        ],
         "prompt": args.prompt,
-        "angle_preset": args.angle_preset,
         "negative_prompt": args.negative_prompt,
         "seed": args.seed,
         "steps": args.steps,
         "true_cfg_scale": args.true_cfg_scale,
-        "use_angle_lora": False,
-        "use_lightning": False,
+        "shadow_strength": args.shadow_strength,
+        "reflection_strength": args.reflection_strength,
+        "color_harmonize_strength": args.color_harmonize_strength,
     }
-    if args.style_reference:
-        payload["style_reference_images_base64"] = [
-            base64.b64encode(args.style_reference.read_bytes()).decode("utf-8")
-        ]
-    if args.angle_reference:
-        payload["angle_reference_images_base64"] = [
-            base64.b64encode(args.angle_reference.read_bytes()).decode("utf-8")
-        ]
     req = request.Request(
         args.url,
         method="POST",

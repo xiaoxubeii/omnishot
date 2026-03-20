@@ -1,0 +1,24 @@
+[
+  {
+    "name": "hotel_warmth",
+    "style_references": [
+      "../data/tmp-sleepwear-batch-output-1773840523/scenes/WechatIMG339__hotel_suite_warmth.png"
+    ],
+    "prompt": "保持上传商品为唯一主体，参考示例图的酒店套房暖光氛围，生成全新的高端电商商品图。场景要有层次丰富的暖色实景光源、柔和反射和高级陈列感。",
+    "negative_prompt": "不要人物，不要第二件商品，不要文字，不要水印。",
+    "shadow_strength": 0.46,
+    "reflection_strength": 0.18,
+    "color_harmonize_strength": 0.2
+  },
+  {
+    "name": "balcony_morning",
+    "style_references": [
+      "../data/tmp-sleepwear-batch-output-1773840523/scenes/WechatIMG339__morning_balcony_fresh.png"
+    ],
+    "prompt": "保持上传商品为唯一主体，参考示例图的清晨露台氛围，生成新的自然晨光电商商品图。强调空气感、干净留白、柔和高光和清爽的高端生活方式风格。",
+    "negative_prompt": "不要人物，不要第二件商品，不要文字，不要水印。",
+    "shadow_strength": 0.38,
+    "reflection_strength": 0.1,
+    "color_harmonize_strength": 0.16
+  }
+]

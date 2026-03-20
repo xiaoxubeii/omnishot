@@ -27,6 +27,8 @@ class TryOnJsonRequest(BaseModel):
 
 class EditJsonRequest(BaseModel):
     image_base64: str = Field(min_length=1)
+    style_reference_images_base64: list[str] = Field(default_factory=list)
+    angle_reference_images_base64: list[str] = Field(default_factory=list)
     prompt: str = ""
     negative_prompt: str = ""
     filename: str | None = None
@@ -36,10 +38,26 @@ class EditJsonRequest(BaseModel):
     steps: int = 8
     true_cfg_scale: float = 1.0
     angle_preset: str | None = None
-    use_angle_lora: bool = True
+    use_angle_lora: bool = False
     angle_lora_scale: float = 1.0
-    use_lightning: bool = True
+    use_lightning: bool = False
     lightning_lora_scale: float = 1.0
+
+
+class ReferenceSceneJsonRequest(BaseModel):
+    image_base64: str = Field(min_length=1)
+    style_reference_images_base64: list[str] = Field(default_factory=list)
+    prompt: str = Field(min_length=1)
+    negative_prompt: str = ""
+    filename: str | None = None
+    seed: int = 123
+    width: int | None = None
+    height: int | None = None
+    steps: int = 8
+    true_cfg_scale: float = 1.0
+    shadow_strength: float = 0.4
+    reflection_strength: float = 0.14
+    color_harmonize_strength: float = 0.18
 
 
 class GenerateResponse(BaseModel):
@@ -67,4 +85,8 @@ class HealthResponse(BaseModel):
     tryon_root_exists: bool = False
     tryon_template_count: int = 0
     edit_preset_count: int = 0
+    qwen_edit_model_id: str
+    qwen_edit_model_cached: bool = False
+    qwen_edit_model_ready: bool = False
+    qwen_edit_cache_issues: list[str] = Field(default_factory=list)
     comfyui_details: dict = Field(default_factory=dict)

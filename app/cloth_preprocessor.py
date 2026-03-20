@@ -3,7 +3,7 @@ import logging
 from pathlib import Path
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageFilter
 from scipy import ndimage
 
 from app.comfy_client import ComfyClient
@@ -40,6 +40,10 @@ def _build_cutout_workflow(image_name: str) -> dict:
             },
         },
     }
+
+
+def _load_rgba_image(image_bytes: bytes) -> Image.Image:
+    return Image.open(io.BytesIO(image_bytes)).convert("RGBA")
 
 
 def _keep_largest_alpha_component(image: Image.Image) -> Image.Image:
@@ -79,12 +83,72 @@ def _crop_and_flatten(image: Image.Image) -> Image.Image:
     return flattened
 
 
+def _extract_cutout_locally(image_bytes: bytes) -> Image.Image:
+    return _keep_largest_alpha_component(_load_rgba_image(image_bytes))
+
+
 def _preprocess_locally(image_bytes: bytes) -> Image.Image:
     # Fast local fallback when ComfyUI RMBG is unavailable. This does not
     # remove the background aggressively, but it keeps try-on smoke tests and
     # clean catalog images runnable without a live ComfyUI worker.
-    source = Image.open(io.BytesIO(image_bytes)).convert("RGBA")
-    return _crop_and_flatten(source)
+    return _crop_and_flatten(_extract_cutout_locally(image_bytes))
+
+
+async def extract_cutout_rgba(
+    *,
+    comfy: ComfyClient,
+    image_bytes: bytes,
+    filename: str,
+    timeout_seconds: int,
+) -> Image.Image:
+    try:
+        comfy_filename = await comfy.upload_image(image_bytes, filename)
+        workflow = _build_cutout_workflow(comfy_filename)
+        result = await comfy.run_workflow(
+            workflow,
+            preferred_output_nodes=["3"],
+            timeout_seconds=timeout_seconds,
+        )
+        return _keep_largest_alpha_component(_load_rgba_image(result.image_bytes))
+    except Exception as exc:
+        LOGGER.warning("ComfyUI cutout extraction failed, falling back to local cutout: %s", exc)
+        return _extract_cutout_locally(image_bytes)
+
+
+def composite_foreground_locked(
+    *,
+    foreground_rgba: Image.Image,
+    background_rgb: Image.Image,
+    feather_radius: float = 1.5,
+) -> Image.Image:
+    background = background_rgb.convert("RGBA")
+    source = foreground_rgba.convert("RGBA")
+
+    scale = min(
+        background.width / max(source.width, 1),
+        background.height / max(source.height, 1),
+    )
+    resized_size = (
+        max(1, int(round(source.width * scale))),
+        max(1, int(round(source.height * scale))),
+    )
+    resized = source.resize(resized_size, Image.Resampling.LANCZOS)
+
+    canvas = Image.new("RGBA", background.size, (0, 0, 0, 0))
+    offset = (
+        (background.width - resized.width) // 2,
+        (background.height - resized.height) // 2,
+    )
+    canvas.alpha_composite(resized, offset)
+
+    alpha = canvas.getchannel("A")
+    if feather_radius > 0:
+        alpha = alpha.filter(ImageFilter.GaussianBlur(feather_radius))
+        canvas.putalpha(alpha)
+
+    locked = background.copy()
+    locked.alpha_composite(canvas)
+    return locked.convert("RGB")
 
 
 async def preprocess_cloth_image(
@@ -103,7 +167,7 @@ async def preprocess_cloth_image(
             preferred_output_nodes=["3"],
             timeout_seconds=timeout_seconds,
         )
-        prepared = _crop_and_flatten(Image.open(io.BytesIO(result.image_bytes)))
+        prepared = _crop_and_flatten(_load_rgba_image(result.image_bytes))
     except Exception as exc:
         LOGGER.warning("ComfyUI cloth preprocessing failed, falling back to local remover: %s", exc)
         prepared = _preprocess_locally(image_bytes)

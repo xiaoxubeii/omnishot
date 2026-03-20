@@ -304,8 +304,8 @@ def process_once(args: argparse.Namespace) -> None:
                 "seed": seed,
                 "steps": 8,
                 "true_cfg_scale": 1.0,
-                "use_angle_lora": bool(preset.get("use_angle_lora", True)),
-                "use_lightning": True,
+                "use_angle_lora": False,
+                "use_lightning": False,
             }
             response_payload = api_post_json(
                 f"{args.api_base_url}/generate/edit",
@@ -411,8 +411,8 @@ def process_once(args: argparse.Namespace) -> None:
                     "seed": seed,
                     "steps": 8,
                     "true_cfg_scale": 1.0,
-                    "use_angle_lora": bool(preset.get("use_angle_lora", True)),
-                    "use_lightning": True,
+                    "use_angle_lora": False,
+                    "use_lightning": False,
                 }
                 response_payload = api_post_json(
                     f"{args.api_base_url}/generate/edit",

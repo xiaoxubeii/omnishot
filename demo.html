@@ -321,7 +321,7 @@
   <div class="wrap">
     <section class="hero">
       <h1>AI 幻影影棚</h1>
-      <p>同一个商品，拆成三条生成引擎处理。`Scene` 用于静物换场景和光影，`Try-On` 用于模特上身，`Edit` 用于 Qwen 多角度和在线编辑。这样才能同时保住商品主体一致性和商业展示质量。</p>
+      <p>同一个商品，拆成四条生成引擎处理。`Scene` 用于静物换场景和光影，`Reference Scene` 用于示例图驱动的风格场景生成并锁定商品主体，`Try-On` 用于模特上身，`Edit` 用于 Qwen 多角度和在线编辑。</p>
       <div id="healthBadges"></div>
     </section>
 
@@ -331,6 +331,7 @@
           <label for="mode">生成模式</label>
           <select id="mode">
             <option value="scene">Scene 场景图</option>
+            <option value="reference_scene">Reference Scene 参考图场景</option>
             <option value="tryon">Try-On 模特上身</option>
             <option value="edit">Edit 多角度 / 在线编辑</option>
             <option value="batch">Batch 批量电商出图</option>
@@ -414,6 +415,52 @@
           </div>
         </div>
 
+        <div id="referenceSceneFields" class="hidden">
+          <div class="row">
+            <label for="referenceSceneStyleImages">风格参考图</label>
+            <input id="referenceSceneStyleImages" type="file" accept="image/*" multiple>
+            <div class="note">至少 1 张。只借鉴场景、氛围、色调、布光和构图，不复制其中的商品或人物。</div>
+          </div>
+          <div class="row">
+            <label for="referenceScenePrompt">中文场景描述</label>
+            <textarea id="referenceScenePrompt" placeholder="例如：保持同一件商品不变，参考示例图的酒店暖光氛围，生成新的高端电商商品图，强调层次丰富的空间光和真实环境反射。"></textarea>
+          </div>
+          <div class="row">
+            <label for="referenceSceneNegativePrompt">反向提示词</label>
+            <textarea id="referenceSceneNegativePrompt">不要人物，不要第二件商品，不要文字，不要水印，不要脏乱背景。</textarea>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="referenceSceneSteps">步数</label>
+              <input id="referenceSceneSteps" type="number" value="8">
+            </div>
+            <div class="row">
+              <label for="referenceSceneCfg">True CFG</label>
+              <input id="referenceSceneCfg" type="number" step="0.1" value="1.0">
+            </div>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="referenceSceneSeed">Seed</label>
+              <input id="referenceSceneSeed" type="number" value="123">
+            </div>
+            <div class="row">
+              <label for="referenceSceneShadow">阴影融合强度</label>
+              <input id="referenceSceneShadow" type="number" step="0.01" value="0.40">
+            </div>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="referenceSceneReflection">反射融合强度</label>
+              <input id="referenceSceneReflection" type="number" step="0.01" value="0.14">
+            </div>
+            <div class="row">
+              <label for="referenceSceneColorBlend">色彩融合强度</label>
+              <input id="referenceSceneColorBlend" type="number" step="0.01" value="0.18">
+            </div>
+          </div>
+        </div>
+
         <div id="editFields" class="hidden">
           <div class="row">
             <label for="editPreset">编辑预设</label>
@@ -423,6 +470,18 @@
           <div class="row">
             <label for="editPrompt">补充提示词</label>
             <textarea id="editPrompt" placeholder="例如：同一件商品，放在干净高级的白色布景中，只强化边缘光和空间层次"></textarea>
+          </div>
+          <div class="inline">
+            <div class="row">
+              <label for="styleReferenceImage">风格参考图</label>
+              <input id="styleReferenceImage" type="file" accept="image/*">
+              <div class="note">可选。只借鉴场景、氛围、色调和布光。</div>
+            </div>
+            <div class="row">
+              <label for="angleReferenceImage">角度参考图</label>
+              <input id="angleReferenceImage" type="file" accept="image/*">
+              <div class="note">可选。只借鉴机位、视角和构图。</div>
+            </div>
           </div>
           <div class="row">
             <label for="editNegativePrompt">反向提示词</label>
@@ -444,19 +503,19 @@
               <input id="editSeed" type="number" value="123">
             </div>
             <div class="row">
-              <label for="editUseAngleLora">多角度 LoRA</label>
+              <label for="editUseAngleLora">多角度 LoRA（旧版，可选）</label>
               <select id="editUseAngleLora">
-                <option value="true">开启</option>
                 <option value="false">关闭</option>
+                <option value="true">开启</option>
               </select>
             </div>
           </div>
           <div class="inline">
             <div class="row">
-              <label for="editUseLightning">Lightning</label>
+              <label for="editUseLightning">Lightning 加速（可选）</label>
               <select id="editUseLightning">
-                <option value="true">开启</option>
                 <option value="false">关闭</option>
+                <option value="true">开启</option>
               </select>
             </div>
             <div class="row">
@@ -572,8 +631,20 @@
       steps: document.getElementById("steps"),
       guidance: document.getElementById("guidance"),
       seed: document.getElementById("seed"),
+      referenceSceneFields: document.getElementById("referenceSceneFields"),
+      referenceSceneStyleImages: document.getElementById("referenceSceneStyleImages"),
+      referenceScenePrompt: document.getElementById("referenceScenePrompt"),
+      referenceSceneNegativePrompt: document.getElementById("referenceSceneNegativePrompt"),
+      referenceSceneSteps: document.getElementById("referenceSceneSteps"),
+      referenceSceneCfg: document.getElementById("referenceSceneCfg"),
+      referenceSceneSeed: document.getElementById("referenceSceneSeed"),
+      referenceSceneShadow: document.getElementById("referenceSceneShadow"),
+      referenceSceneReflection: document.getElementById("referenceSceneReflection"),
+      referenceSceneColorBlend: document.getElementById("referenceSceneColorBlend"),
       editPreset: document.getElementById("editPreset"),
       editPrompt: document.getElementById("editPrompt"),
+      styleReferenceImage: document.getElementById("styleReferenceImage"),
+      angleReferenceImage: document.getElementById("angleReferenceImage"),
       editNegativePrompt: document.getElementById("editNegativePrompt"),
       editSteps: document.getElementById("editSteps"),
       editCfg: document.getElementById("editCfg"),
@@ -657,9 +728,12 @@
     }
 
     function renderBadges(health) {
+      const qwenReady = health.qwen_edit_model_ready ?? health.qwen_edit_model_cached;
       const badges = [
         `ComfyUI: ${health.comfyui_reachable ? "在线" : "离线"}`,
         `Try-On: ${health.tryon_script_exists && health.tryon_root_exists ? "已接入" : "未就绪"}`,
+        `Qwen: ${health.qwen_edit_model_id ?? "unknown"}`,
+        `Qwen 就绪: ${qwenReady ? "可用" : "未就绪"}`,
         `模板数: ${health.tryon_template_count ?? 0}`,
         `Edit 预设: ${health.edit_preset_count ?? 0}`,
         `Workflow 节点: ${health.workflow_nodes ?? 0}`,
@@ -673,10 +747,12 @@
       const prefix = profile ? `当前模板：${profile.title}。` : "";
       if (mode === "scene") {
         els.modeGuide.textContent = `${prefix}上传商品图，选择场景预设，生成静物场景和光线变化图。`;
+      } else if (mode === "reference_scene") {
+        els.modeGuide.textContent = `${prefix}上传商品图、风格参考图和中文场景描述，先生成场景候选，再自动把原商品主体压回去并做阴影/反射/色彩融合。`;
       } else if (mode === "tryon") {
         els.modeGuide.textContent = `${prefix}上传商品图，选择模特模板或自定义模特，生成真实上身展示图。`;
       } else if (mode === "edit") {
-        els.modeGuide.textContent = `${prefix}上传商品图或复用上一轮结果，选择多角度/光线预设，做连续在线编辑。`;
+        els.modeGuide.textContent = `${prefix}上传商品图或复用上一轮结果，可附加风格参考图和角度参考图，做高保真连续在线编辑。`;
       } else {
         els.modeGuide.textContent = `${prefix}批量上传多张商品图，按模板顺序依次生成整套电商素材。`;
       }
@@ -685,17 +761,21 @@
     function updateModeUI() {
       const mode = els.mode.value;
       const isScene = mode === "scene";
+      const isReferenceScene = mode === "reference_scene";
       const isTryon = mode === "tryon";
       const isEdit = mode === "edit";
       const isBatch = mode === "batch";
       els.singleImageRow.classList.toggle("hidden", isBatch);
       els.batchFields.classList.toggle("hidden", !isBatch);
       els.sceneFields.classList.toggle("hidden", !isScene);
+      els.referenceSceneFields.classList.toggle("hidden", !isReferenceScene);
       els.tryonFields.classList.toggle("hidden", !isTryon);
       els.editFields.classList.toggle("hidden", !isEdit);
       els.batchResults.classList.toggle("hidden", !isBatch);
       els.submit.textContent = isScene
         ? "生成场景图"
+        : isReferenceScene
+          ? "生成参考图场景"
         : isTryon
           ? "生成模特上身图"
           : isEdit
@@ -719,7 +799,7 @@
       const preset = state.editPresets.find((item) => item.name === els.editPreset.value);
       if (!preset) return;
       els.editNegativePrompt.value = preset.negative_prompt || "";
-      els.editUseAngleLora.value = preset.use_angle_lora ? "true" : "false";
+      els.editUseAngleLora.value = "false";
       els.editPresetGuide.textContent = preset.prompt_template || "选择一个多角度或光线编辑方向。";
     }
 
@@ -886,7 +966,13 @@
       const comfy = data.comfyui_reachable ? "ComfyUI 在线" : "ComfyUI 未连通";
       const tryon = data.tryon_script_exists && data.tryon_root_exists ? "Try-On 已接入" : "Try-On 未就绪";
       const edit = `Edit 预设 ${data.edit_preset_count ?? 0} 个`;
-      setStatus(`${comfy}，${tryon}，${edit}`);
+      const qwen = `Qwen ${data.qwen_edit_model_id ?? "unknown"}`;
+      const qwenReady = data.qwen_edit_model_ready ?? data.qwen_edit_model_cached;
+      const qwenStatus = qwenReady ? "Qwen 权重已就绪" : "Qwen 权重未就绪";
+      const qwenIssues = Array.isArray(data.qwen_edit_cache_issues) && data.qwen_edit_cache_issues.length
+        ? `；原因：${data.qwen_edit_cache_issues.join("；")}`
+        : "";
+      setStatus(`${comfy}，${tryon}，${edit}，${qwen}，${qwenStatus}${qwenIssues}`);
     }
 
     async function fetchPresets() {
@@ -983,6 +1069,34 @@
       return await readApiPayload(response);
     }
 
+    async function submitReferenceScene() {
+      const image = els.image.files[0];
+      const styleReferences = Array.from(els.referenceSceneStyleImages.files || []);
+      if (!image) throw new Error("请选择商品图。");
+      if (!styleReferences.length) throw new Error("请至少上传一张风格参考图。");
+      if (!els.referenceScenePrompt.value.trim()) throw new Error("请填写中文场景描述。");
+
+      const formData = new FormData();
+      formData.append("image", image);
+      formData.append("prompt", els.referenceScenePrompt.value.trim());
+      formData.append("negative_prompt", els.referenceSceneNegativePrompt.value.trim());
+      formData.append("steps", els.referenceSceneSteps.value.trim() || "8");
+      formData.append("true_cfg_scale", els.referenceSceneCfg.value.trim() || "1.0");
+      formData.append("seed", els.referenceSceneSeed.value.trim() || "123");
+      formData.append("shadow_strength", els.referenceSceneShadow.value.trim() || "0.4");
+      formData.append("reflection_strength", els.referenceSceneReflection.value.trim() || "0.14");
+      formData.append("color_harmonize_strength", els.referenceSceneColorBlend.value.trim() || "0.18");
+      for (const file of styleReferences) {
+        formData.append("style_reference_images", file);
+      }
+
+      const response = await fetch("/generate/reference-scene", {
+        method: "POST",
+        body: formData,
+      });
+      return await readApiPayload(response);
+    }
+
     async function submitTryon() {
       const image = els.image.files[0];
       if (!image) throw new Error("请选择商品图。");
@@ -1025,6 +1139,12 @@
       formData.append("steps", els.editSteps.value.trim() || "8");
       formData.append("true_cfg_scale", els.editCfg.value.trim() || "1.0");
       formData.append("seed", els.editSeed.value.trim() || "123");
+      if (els.styleReferenceImage.files[0]) {
+        formData.append("style_reference_image", els.styleReferenceImage.files[0]);
+      }
+      if (els.angleReferenceImage.files[0]) {
+        formData.append("angle_reference_image", els.angleReferenceImage.files[0]);
+      }
       if (els.editWidth.value.trim()) formData.append("width", els.editWidth.value.trim());
       if (els.editHeight.value.trim()) formData.append("height", els.editHeight.value.trim());
 
@@ -1094,8 +1214,8 @@
             seed,
             steps: 8,
             true_cfg_scale: 1.0,
-            use_angle_lora: !!preset.use_angle_lora,
-            use_lightning: true,
+            use_angle_lora: false,
+            use_lightning: false,
           });
           pushResult(data, "edit", preset.name, sourceName);
           completed += 1;
@@ -1135,8 +1255,8 @@
               seed,
               steps: 8,
               true_cfg_scale: 1.0,
-              use_angle_lora: !!preset.use_angle_lora,
-              use_lightning: true,
+              use_angle_lora: false,
+              use_lightning: false,
             });
             pushResult(data, "tryon_angle", `${templateName} / ${preset.name}`, sourceName);
             completed += 1;
@@ -1203,6 +1323,8 @@
         } else {
           const data = els.mode.value === "scene"
             ? await submitScene()
+            : els.mode.value === "reference_scene"
+              ? await submitReferenceScene()
             : els.mode.value === "tryon"
               ? await submitTryon()
               : await submitEdit();

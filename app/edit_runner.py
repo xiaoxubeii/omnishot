@@ -202,16 +202,15 @@ class QwenEditService:
             adapter_names.append("multiple_angles")
             adapter_weights.append(float(angle_lora_scale))
 
-        if not adapter_names:
-            raise RuntimeError("No active Qwen Edit adapters selected.")
-
-        pipeline.set_adapters(adapter_names, adapter_weights)
+        if adapter_names:
+            pipeline.set_adapters(adapter_names, adapter_weights)
         return adapter_names, adapter_weights
 
     def generate(
         self,
         *,
         image: Image.Image,
+        reference_images: list[Image.Image] | None,
         prompt: str,
         negative_prompt: str,
         seed: int,
@@ -226,6 +225,9 @@ class QwenEditService:
     ) -> QwenEditRunResult:
         pipeline = self._ensure_pipeline()
         source = ImageOps.exif_transpose(image).convert("RGB")
+        prompt_images = [source]
+        if reference_images:
+            prompt_images.extend(ImageOps.exif_transpose(item).convert("RGB") for item in reference_images)
         candidate_sizes = self._candidate_sizes(source, width, height)
 
         with self._run_lock:
@@ -248,7 +250,7 @@ class QwenEditService:
                     # requires_grad flags, which is incompatible with inference_mode.
                     with torch.no_grad():
                         output = pipeline(
-                            image=source,
+                            image=prompt_images,
                             prompt=prompt,
                             negative_prompt=negative_prompt or None,
                             true_cfg_scale=true_cfg_scale,
@@ -305,6 +307,7 @@ async def run_qwen_edit(
     settings: Settings,
     *,
     image: Image.Image,
+    reference_images: list[Image.Image] | None,
     prompt: str,
     negative_prompt: str,
     seed: int,
@@ -321,6 +324,7 @@ async def run_qwen_edit(
     return await asyncio.to_thread(
         service.generate,
         image=image,
+        reference_images=reference_images,
         prompt=prompt,
         negative_prompt=negative_prompt,
         seed=seed,
