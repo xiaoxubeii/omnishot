@@ -70,6 +70,22 @@ cd /home/cheng/workspace/ai-phantom-studio-demo
 ./scripts/start_mcp_server.sh --transport stdio
 ```
 
+### 默认启动（HTTP，适合远端调用）
+
+如果不传参数，`start_mcp_server.sh` 现在默认启动为 `streamable-http`：
+
+```bash
+cd /home/cheng/workspace/ai-phantom-studio-demo
+./scripts/start_mcp_server.sh
+```
+
+默认监听地址：
+
+- `host`: `0.0.0.0`
+- `port`: `8765`
+- `path`: `/mcp`
+- 远端访问示例：`http://<你的服务器IP或域名>:8765/mcp`
+
 ### Streamable HTTP 模式
 
 ```bash
