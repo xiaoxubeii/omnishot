@@ -1,0 +1,176 @@
+{
+  "49": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": [
+        "61",
+        0
+      ],
+      "clip": [
+        "55",
+        1
+      ]
+    }
+  },
+  "50": {
+    "class_type": "ReferenceLatent",
+    "inputs": {
+      "conditioning": [
+        "49",
+        0
+      ],
+      "latent": [
+        "58",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "DualCLIPLoader",
+    "inputs": {
+      "clip_name1": "clip_l",
+      "clip_name2": "t5xxl_fp8_e4m3fn",
+      "type": "flux",
+      "device": "default"
+    }
+  },
+  "52": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.sft"
+    }
+  },
+  "53": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "49",
+        0
+      ]
+    }
+  },
+  "54": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "F.1 Kontext dev_fp8",
+      "weight_dtype": "default"
+    }
+  },
+  "55": {
+    "class_type": "LoraLoader",
+    "inputs": {
+      "model": [
+        "54",
+        0
+      ],
+      "clip": [
+        "51",
+        0
+      ],
+      "lora_name": "F.1 Kontext【电商通用质感增强】_熊猫头AI_电商通用v1.0",
+      "strength_model": 0.8,
+      "strength_clip": 1
+    }
+  },
+  "56": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "55",
+        0
+      ],
+      "seed": 927087083425061,
+      "control_after_generate": "randomize",
+      "steps": 30,
+      "cfg": 1,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "positive": [
+        "62",
+        0
+      ],
+      "negative": [
+        "53",
+        0
+      ],
+      "latent_image": [
+        "66",
+        0
+      ],
+      "denoise": 1
+    }
+  },
+  "57": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "65",
+        0
+      ]
+    }
+  },
+  "58": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "57",
+        0
+      ],
+      "vae": [
+        "52",
+        0
+      ]
+    }
+  },
+  "59": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "56",
+        0
+      ],
+      "vae": [
+        "52",
+        0
+      ]
+    }
+  },
+  "61": {
+    "class_type": "LibLibTranslate",
+    "inputs": {}
+  },
+  "62": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "50",
+        0
+      ],
+      "guidance": 2.5
+    }
+  },
+  "63": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "59",
+        0
+      ],
+      "filename_prefix": "ComfyUI"
+    }
+  },
+  "65": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "229cf2fe46f3b0f56ec338edb9d6cafd6965ee94127d6ea5a919e676dfe8d86c.png"
+    }
+  },
+  "66": {
+    "class_type": "EmptyLatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1536,
+      "batch_size": 1
+    }
+  }
+}

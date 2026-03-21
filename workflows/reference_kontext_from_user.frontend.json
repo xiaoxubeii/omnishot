@@ -1,0 +1,366 @@
+{
+  "nodes": [
+    {
+      "id": 49,
+      "type": "CLIPTextEncode",
+      "inputs": [
+        {
+          "name": "clip",
+          "link": 55
+        },
+        {
+          "name": "text",
+          "link": 56,
+          "widget": {
+            "name": "text"
+          }
+        }
+      ],
+      "widgets_values": [
+        "Using this elegant style, create a portrait of a swan wearing a pearl tiara and lace collar, maintaining the same refined quality and soft color tones."
+      ]
+    },
+    {
+      "id": 50,
+      "type": "ReferenceLatent",
+      "inputs": [
+        {
+          "name": "conditioning",
+          "link": 57
+        },
+        {
+          "name": "latent",
+          "link": 58
+        }
+      ]
+    },
+    {
+      "id": 51,
+      "type": "DualCLIPLoader",
+      "inputs": [],
+      "widgets_values": [
+        "clip_l",
+        "t5xxl_fp8_e4m3fn",
+        "flux",
+        "default"
+      ]
+    },
+    {
+      "id": 52,
+      "type": "VAELoader",
+      "inputs": [],
+      "widgets_values": [
+        "ae.sft"
+      ]
+    },
+    {
+      "id": 53,
+      "type": "ConditioningZeroOut",
+      "inputs": [
+        {
+          "name": "conditioning",
+          "link": 59
+        }
+      ]
+    },
+    {
+      "id": 54,
+      "type": "UNETLoader",
+      "inputs": [],
+      "widgets_values": [
+        "F.1 Kontext dev_fp8",
+        "default"
+      ]
+    },
+    {
+      "id": 55,
+      "type": "LoraLoader",
+      "inputs": [
+        {
+          "name": "model",
+          "link": 60
+        },
+        {
+          "name": "clip",
+          "link": 61
+        }
+      ],
+      "widgets_values": [
+        "F.1 Kontext【电商通用质感增强】_熊猫头AI_电商通用v1.0",
+        0.8,
+        1
+      ]
+    },
+    {
+      "id": 56,
+      "type": "KSampler",
+      "inputs": [
+        {
+          "name": "model",
+          "link": 62
+        },
+        {
+          "name": "positive",
+          "link": 63
+        },
+        {
+          "name": "negative",
+          "link": 64
+        },
+        {
+          "name": "latent_image",
+          "link": 75
+        }
+      ],
+      "widgets_values": [
+        927087083425061,
+        "randomize",
+        30,
+        1,
+        "euler",
+        "normal",
+        1
+      ]
+    },
+    {
+      "id": 57,
+      "type": "FluxKontextImageScale",
+      "inputs": [
+        {
+          "name": "image",
+          "link": 76
+        }
+      ]
+    },
+    {
+      "id": 58,
+      "type": "VAEEncode",
+      "inputs": [
+        {
+          "name": "pixels",
+          "link": 67
+        },
+        {
+          "name": "vae",
+          "link": 68
+        }
+      ]
+    },
+    {
+      "id": 59,
+      "type": "VAEDecode",
+      "inputs": [
+        {
+          "name": "samples",
+          "link": 69
+        },
+        {
+          "name": "vae",
+          "link": 70
+        }
+      ]
+    },
+    {
+      "id": 61,
+      "type": "LibLibTranslate",
+      "inputs": [],
+      "widgets_values": [
+        "Chinese",
+        "English",
+        "保持产品主体不改变，产品置于繁茂的草地上，构图居中。地上散落着石头，石头被部分苔藓覆盖，增添了几分生机。产品在光影的映衬下，置于左侧。背景是绿色的渐变的天空"
+      ]
+    },
+    {
+      "id": 62,
+      "type": "FluxGuidance",
+      "inputs": [
+        {
+          "name": "conditioning",
+          "link": 72
+        }
+      ],
+      "widgets_values": [
+        2.5
+      ]
+    },
+    {
+      "id": 63,
+      "type": "SaveImage",
+      "inputs": [
+        {
+          "name": "images",
+          "link": 73
+        }
+      ],
+      "widgets_values": [
+        "ComfyUI"
+      ]
+    },
+    {
+      "id": 65,
+      "type": "LoadImage",
+      "inputs": [],
+      "widgets_values": [
+        "229cf2fe46f3b0f56ec338edb9d6cafd6965ee94127d6ea5a919e676dfe8d86c.png",
+        "image",
+        ""
+      ]
+    },
+    {
+      "id": 66,
+      "type": "EmptyLatentImage",
+      "inputs": [],
+      "widgets_values": [
+        1024,
+        1536,
+        1
+      ]
+    }
+  ],
+  "links": [
+    [
+      55,
+      55,
+      1,
+      49,
+      0,
+      "CLIP"
+    ],
+    [
+      56,
+      61,
+      0,
+      49,
+      1,
+      "STRING"
+    ],
+    [
+      57,
+      49,
+      0,
+      50,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      58,
+      58,
+      0,
+      50,
+      1,
+      "LATENT"
+    ],
+    [
+      59,
+      49,
+      0,
+      53,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      60,
+      54,
+      0,
+      55,
+      0,
+      "MODEL"
+    ],
+    [
+      61,
+      51,
+      0,
+      55,
+      1,
+      "CLIP"
+    ],
+    [
+      62,
+      55,
+      0,
+      56,
+      0,
+      "MODEL"
+    ],
+    [
+      63,
+      62,
+      0,
+      56,
+      1,
+      "CONDITIONING"
+    ],
+    [
+      64,
+      53,
+      0,
+      56,
+      2,
+      "CONDITIONING"
+    ],
+    [
+      67,
+      57,
+      0,
+      58,
+      0,
+      "IMAGE"
+    ],
+    [
+      68,
+      52,
+      0,
+      58,
+      1,
+      "VAE"
+    ],
+    [
+      69,
+      56,
+      0,
+      59,
+      0,
+      "LATENT"
+    ],
+    [
+      70,
+      52,
+      0,
+      59,
+      1,
+      "VAE"
+    ],
+    [
+      72,
+      50,
+      0,
+      62,
+      0,
+      "CONDITIONING"
+    ],
+    [
+      73,
+      59,
+      0,
+      63,
+      0,
+      "IMAGE"
+    ],
+    [
+      75,
+      66,
+      0,
+      56,
+      3,
+      "LATENT"
+    ],
+    [
+      76,
+      65,
+      0,
+      57,
+      0,
+      "IMAGE"
+    ]
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "image": [
+    {
+      "node_id": "65",
+      "input_name": "image"
+    }
+  ],
+  "positive_prompt": [
+    {
+      "node_id": "49",
+      "input_name": "text"
+    }
+  ],
+  "negative_prompt": [],
+  "seed": [
+    {
+      "node_id": "56",
+      "input_name": "seed"
+    }
+  ],
+  "preferred_output_nodes": [
+    "63"
+  ]
+}

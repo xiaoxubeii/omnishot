@@ -1,0 +1,153 @@
+{
+  "65": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "request.png",
+      "upload": "image",
+      "subfolder": ""
+    }
+  },
+  "57": {
+    "class_type": "FluxKontextImageScale",
+    "inputs": {
+      "image": [
+        "65",
+        0
+      ]
+    }
+  },
+  "52": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "ae.sft"
+    }
+  },
+  "58": {
+    "class_type": "VAEEncode",
+    "inputs": {
+      "pixels": [
+        "57",
+        0
+      ],
+      "vae": [
+        "52",
+        0
+      ]
+    }
+  },
+  "51": {
+    "class_type": "DualCLIPLoaderGGUF",
+    "inputs": {
+      "clip_name1": "clip_l.safetensors",
+      "clip_name2": "t5xxl_fp8.safetensors",
+      "type": "flux"
+    }
+  },
+  "49": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "保持产品主体不改变，产品置于繁茂的草地上，构图居中。地上散落着石头，石头被部分苔藓覆盖，增添了几分生机。背景是绿色渐变天空。",
+      "clip": [
+        "51",
+        0
+      ]
+    }
+  },
+  "50": {
+    "class_type": "ReferenceLatent",
+    "inputs": {
+      "conditioning": [
+        "49",
+        0
+      ],
+      "latent": [
+        "58",
+        0
+      ]
+    }
+  },
+  "62": {
+    "class_type": "FluxGuidance",
+    "inputs": {
+      "conditioning": [
+        "50",
+        0
+      ],
+      "guidance": 2.5
+    }
+  },
+  "53": {
+    "class_type": "ConditioningZeroOut",
+    "inputs": {
+      "conditioning": [
+        "49",
+        0
+      ]
+    }
+  },
+  "54": {
+    "class_type": "UnetLoaderGGUF",
+    "inputs": {
+      "unet_name": "flux1-dev-Q4_K_S.gguf"
+    }
+  },
+  "66": {
+    "class_type": "EmptySD3LatentImage",
+    "inputs": {
+      "width": 1024,
+      "height": 1536,
+      "batch_size": 1
+    }
+  },
+  "56": {
+    "class_type": "KSampler",
+    "inputs": {
+      "model": [
+        "54",
+        0
+      ],
+      "positive": [
+        "62",
+        0
+      ],
+      "negative": [
+        "53",
+        0
+      ],
+      "latent_image": [
+        "66",
+        0
+      ],
+      "seed": 123,
+      "control_after_generate": "fixed",
+      "steps": 30,
+      "cfg": 1.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0
+    }
+  },
+  "59": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "56",
+        0
+      ],
+      "vae": [
+        "52",
+        0
+      ]
+    }
+  },
+  "63": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "59",
+        0
+      ],
+      "filename_prefix": "phantom-json-reference-latent"
+    }
+  }
+}

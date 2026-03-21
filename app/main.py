@@ -20,6 +20,7 @@ from app.config import ROOT_DIR, get_settings
 from app.edit_runner import run_qwen_edit
 from app.presets import CATALOG_PROFILES, EDIT_PRESETS, SCENE_PRESETS
 from app.reference_scene_pipeline import build_neutral_product_preview, composite_reference_scene
+from app.reference_style_cleanup import prepare_style_reference_images
 from app.schemas import (
     EditJsonRequest,
     GenerateJsonRequest,
@@ -389,12 +390,17 @@ async def generate_reference_scene(request: Request) -> GenerateResponse:
                 timeout_seconds=settings.generation_timeout_seconds,
             )
             neutral_source = build_neutral_product_preview(source_cutout)
-            style_reference_images = [
-                _load_pil_image(item["image_bytes"]) for item in incoming["style_reference_images"]
-            ]
+            style_reference_images, cleanup_metadata = await prepare_style_reference_images(
+                comfy=app.state.comfy,
+                references=incoming["style_reference_images"],
+                original_paths=style_reference_paths,
+                debug_dir=settings.output_dir,
+                timeout_seconds=settings.generation_timeout_seconds,
+            )
             final_prompt = _build_reference_scene_generation_prompt(
                 incoming["prompt"],
                 style_reference_count=len(incoming["style_reference_images"]),
+                style_reference_cleanup_applied=cleanup_metadata["style_reference_cleanup_applied"],
             )
             final_negative_prompt = _merge_reference_scene_negative_prompt(incoming["negative_prompt"])
             result = await run_qwen_edit(
@@ -465,6 +471,7 @@ async def generate_reference_scene(request: Request) -> GenerateResponse:
             "candidate_filename": candidate_name,
             "candidate_output_url": _build_output_url(candidate_name),
             "qwen_edit_model_id": settings.qwen_edit_model_id,
+            **cleanup_metadata,
         },
     )
 
@@ -868,6 +875,7 @@ def _build_reference_scene_generation_prompt(
     prompt: str,
     *,
     style_reference_count: int,
+    style_reference_cleanup_applied: bool = False,
 ) -> str:
     instructions = [
         "图片1是需要保留的商品主体，只允许围绕它生成新的场景和氛围。",
@@ -880,6 +888,8 @@ def _build_reference_scene_generation_prompt(
             f"附加的 {style_reference_count} 张风格参考图只用于借鉴场景空间、布光、色调、氛围、环境反射和镜头情绪，"
             "不得复制其中的人物、商品或主体。"
         )
+    if style_reference_cleanup_applied:
+        instructions.append("风格参考图中的原主体已被预先清理，请只借鉴剩余环境线索，不要重新生成参考图里的商品或主体。")
     instructions.append(prompt.strip())
     instructions.append("输出要求：高级电商广告质感，环境光真实，画面干净，边缘自然，适合后续商品主体锁定合成。")
     return "\n".join(instructions)
