@@ -45,7 +45,16 @@ def build_neutral_product_preview(
         shadow_layer.putalpha(soft_shadow.point(lambda value: int(value * 0.22)))
         canvas.alpha_composite(shadow_layer)
 
-    canvas.alpha_composite(foreground)
+    # Use a low-detail silhouette placeholder instead of the real product pixels.
+    # This preserves placement and volume cues while freeing the model to invent
+    # a stronger environment and lighting pass.
+    silhouette = Image.new("RGBA", foreground.size, (231, 218, 205, 0))
+    blurred_alpha = alpha.filter(ImageFilter.GaussianBlur(max(3, foreground.width // 180)))
+    silhouette.putalpha(blurred_alpha.point(lambda value: int(value * 0.86)))
+    inner_glow = Image.new("RGBA", foreground.size, (255, 245, 236, 0))
+    inner_glow.putalpha(alpha.filter(ImageFilter.GaussianBlur(max(12, foreground.width // 90))).point(lambda value: int(value * 0.18)))
+    canvas.alpha_composite(silhouette)
+    canvas.alpha_composite(inner_glow)
     return canvas.convert("RGB")
 
 
